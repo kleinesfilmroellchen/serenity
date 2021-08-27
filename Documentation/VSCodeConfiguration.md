@@ -116,6 +116,24 @@ You can create custom tasks (`.vscode/tasks.json`) to quickly compile Serenity. 
             },
             "problemMatcher": [
                 {
+                    "source": "Assertion Failed",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}/Build/i686"
+                    ],
+                    "pattern": [
+                        {
+                            "regexp": "ASSERTION FAILED: (.*)$",
+                            "message": 1
+                        },
+                        {
+                            "regexp": "^((?:.*)\\.(h|cpp|c|S)):(\\d*)$",
+                            "file":1,
+                            "location":3
+                        }
+                    ]
+                },
+                {
                     "source": "KUBSan",
                     "owner": "cpp",
                     "fileLocation": [
