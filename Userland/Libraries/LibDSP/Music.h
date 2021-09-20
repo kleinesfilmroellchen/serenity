@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/HashMap.h>
 #include <AK/Types.h>
 #include <AK/Variant.h>
 #include <AK/Vector.h>
@@ -33,13 +34,43 @@ enum class SignalType : u8 {
     Note
 };
 
-struct Signal : public Variant<Sample, Vector<RollNote>> {
+struct Signal : public Variant<Sample, OrderedHashMap<RollNote>> {
     using Variant::Variant;
     ALWAYS_INLINE SignalType type() const
     {
-        return has<Sample>() ? SignalType::Sample : has<Vector<RollNote>>() ? SignalType::Note
-                                                                            : SignalType::Invalid;
+        return has<Sample>() ? SignalType::Sample : has<OrderedHashMap<RollNote>>() ? SignalType::Note
+                                                                                    : SignalType::Invalid;
     }
+};
+
+struct Envelope {
+    Envelope() = default;
+    Envelope(double env)
+        : envelope(env)
+    {
+    }
+
+    bool is_attack() const { return 0 <= envelope && envelope < 1; }
+    double attack() const { return clamp(envelope, 0, 1); }
+    void set_attack(double offset) { envelope = offset; }
+
+    bool is_decay() const { return 1 <= envelope && envelope < 2; }
+    double decay() const { return clamp(envelope, 1, 2) - 1; }
+    void set_decay(double offset) { envelope = 1 + offset; }
+
+    bool is_sustain() const { return 2 <= envelope && envelope < 3; }
+    double sustain() const { return clamp(envelope, 2, 3) - 2; }
+    void set_sustain(double offset) { envelope = 2 + offset; }
+
+    bool is_release() const { return 3 <= envelope && envelope < 4; }
+    double release() const { return clamp(envelope, 3, 4) - 3; }
+    void set_release(double offset) { envelope = 3 + offset; }
+
+    bool is_active() const { return 0 <= envelope && envelope < 4; }
+
+    void reset() { envelope = -1; }
+
+    double envelope { -1 };
 };
 
 // Equal temperament, A = 440Hz

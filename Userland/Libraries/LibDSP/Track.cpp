@@ -5,6 +5,7 @@
  */
 
 #include "Track.h"
+#include "AK/Forward.h"
 #include "Processor.h"
 #include <AK/Types.h>
 
@@ -57,7 +58,7 @@ Sample Track::current_signal()
     return the_signal.get<Sample>();
 }
 
-Signal NoteTrack::current_clips_signal()
+void NoteTrack::compute_current_clips_signal()
 {
     u32 time = m_transport->time();
     // Find the currently playing clip.
@@ -68,26 +69,25 @@ Signal NoteTrack::current_clips_signal()
             break;
         }
     }
-    if (playing_clip == nullptr) {
-        return Signal(Vector<RollNote>());
-    }
 
-    // Find the playing notes inside the clip.
-    Vector<RollNote> playing_notes;
+    auto& current_notes = m_current_signal.get<OrderedHashMap<RollNote>>();
+    m_current_signal.get<OrderedHashMap<RollNote>>().clear_with_capacity();
+
+    if (playing_clip == nullptr)
+        return;
+
     // FIXME: performance?
     for (auto& note_list : playing_clip->notes()) {
         for (auto& note : note_list) {
             if (note.on_sample >= time && note.off_sample >= time)
                 break;
             if (note.on_sample <= time && note.off_sample >= time)
-                // FIXME: This copies the note, but we don't rely on playing_clip to keep its notes around.
-                playing_notes.append(note);
+                current_notes.set(note.pitch, note);
         }
     }
-    return Signal(playing_notes);
 }
 
-Signal AudioTrack::current_clips_signal()
+void AudioTrack::compute_current_clips_signal()
 {
     // Find the currently playing clip.
     u32 time = m_transport->time();
@@ -99,12 +99,12 @@ Signal AudioTrack::current_clips_signal()
         }
     }
     if (playing_clip == nullptr) {
-        return Signal(static_cast<Sample const&>(SAMPLE_OFF));
+        m_current_signal = Signal(static_cast<Sample const&>(SAMPLE_OFF));
     }
 
     // Index into the clip's samples.
     u32 effective_sample = time - playing_clip->start();
-    return Signal(playing_clip->sample_at(effective_sample));
+    m_current_signal = Signal(playing_clip->sample_at(effective_sample));
 }
 
 }
