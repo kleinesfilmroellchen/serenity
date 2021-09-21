@@ -10,10 +10,14 @@
 
 #include "Music.h"
 #include <AK/Noncopyable.h>
+#include <AK/NonnullRefPtr.h>
 #include <AK/SinglyLinkedList.h>
 #include <LibAudio/Buffer.h>
 #include <LibDSP/Effects.h>
+#include <LibDSP/Music.h>
+#include <LibDSP/Synthesizers.h>
 
+using LibDSP::RollNote;
 using RollIter = AK::SinglyLinkedListIterator<SinglyLinkedList<RollNote>, RollNote>;
 
 class Track {
@@ -82,6 +86,7 @@ private:
 
     NonnullRefPtr<LibDSP::Transport> m_temporary_transport;
     NonnullRefPtr<LibDSP::Effects::Delay> m_delay;
+    NonnullRefPtr<LibDSP::Synthesizers::Classic> m_synth;
 
     SinglyLinkedList<RollNote> m_roll_notes[note_count];
     RollIter m_roll_iterators[note_count];

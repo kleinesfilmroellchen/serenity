@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include "Track.h"
-#include "AK/Forward.h"
-#include "Processor.h"
+#include <AK/Optional.h>
 #include <AK/Types.h>
+#include <LibDSP/Processor.h>
+#include <LibDSP/Track.h>
 
 using namespace std;
 
@@ -50,12 +50,14 @@ bool NoteTrack::check_processor_chain_valid() const
 
 Sample Track::current_signal()
 {
-    Signal the_signal = current_clips_signal();
+    compute_current_clips_signal();
+    Optional<Signal> the_signal;
+
     for (auto& processor : m_processor_chain) {
-        the_signal = processor.process(the_signal);
+        the_signal = processor.process(the_signal.value_or(m_current_signal));
     }
-    VERIFY(the_signal.type() == SignalType::Sample);
-    return the_signal.get<Sample>();
+    VERIFY(the_signal.has_value() && the_signal->type() == SignalType::Sample);
+    return the_signal->get<Sample>();
 }
 
 void NoteTrack::compute_current_clips_signal()
@@ -70,8 +72,8 @@ void NoteTrack::compute_current_clips_signal()
         }
     }
 
-    auto& current_notes = m_current_signal.get<OrderedHashMap<RollNote>>();
-    m_current_signal.get<OrderedHashMap<RollNote>>().clear_with_capacity();
+    auto& current_notes = m_current_signal.get<RollNotes>();
+    m_current_signal.get<RollNotes>().clear_with_capacity();
 
     if (playing_clip == nullptr)
         return;

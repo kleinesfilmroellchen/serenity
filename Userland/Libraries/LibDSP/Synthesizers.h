@@ -21,12 +21,40 @@ enum Waveform : u8 {
     Noise,
 };
 
+struct PitchedEnvelope : Envelope {
+    constexpr PitchedEnvelope() = default;
+    constexpr PitchedEnvelope(double envelope, u8 note)
+        : Envelope(envelope)
+        , note(note)
+    {
+    }
+    constexpr PitchedEnvelope(Envelope envelope, u8 note)
+        : Envelope(envelope)
+        , note(note)
+    {
+    }
+
+    u8 note;
+};
+
 class Classic : public SynthesizerProcessor {
 public:
     Classic(NonnullRefPtr<Transport>);
 
+    static Envelope compute_envelope(RollNote&);
+
 private:
     virtual Signal process_impl(Signal const&) override;
+
+    double volume_from_envelope(Envelope);
+    double wave_position(u8 note);
+    double samples_per_cycle(u8 note);
+    double sin_position(u8 note);
+    double triangle_position(u8 note);
+    double square_position(u8 note);
+    double saw_position(u8 note);
+    double noise_position(u8 note);
+    double get_random_from_seed(u64 note);
 
     ProcessorEnumParameter<Waveform> m_waveform;
     ProcessorRangeParameter m_attack;
@@ -34,7 +62,8 @@ private:
     ProcessorRangeParameter m_sustain;
     ProcessorRangeParameter m_release;
 
-    Array<Envelope, note_count> m_envelopes;
+    RollNotes m_playing_notes;
+    double last_random;
 };
 
 }

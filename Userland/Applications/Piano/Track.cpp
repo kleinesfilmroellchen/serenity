@@ -7,7 +7,9 @@
  */
 
 #include "Track.h"
+#include "Music.h"
 #include <AK/Math.h>
+#include <AK/NonnullRefPtr.h>
 #include <AK/NumericLimits.h>
 #include <LibAudio/Loader.h>
 #include <LibDSP/Music.h>
@@ -17,6 +19,7 @@ Track::Track(const u32& time)
     : m_time(time)
     , m_temporary_transport(make_ref_counted<LibDSP::Transport>(120, 4))
     , m_delay(make_ref_counted<LibDSP::Effects::Delay>(m_temporary_transport))
+    , m_synth(make_ref_counted<LibDSP::Synthesizers::Classic>(m_temporary_transport))
 {
     set_volume(volume_max);
     set_sustain_impl(1000);
@@ -31,8 +34,11 @@ Track::~Track()
 
 void Track::fill_sample(Sample& sample)
 {
+    m_temporary_transport->time() = m_time;
+
     Audio::Frame new_sample;
 
+    // FIXME: Use the LibDSP roll notes instead
     for (size_t note = 0; note < note_count; ++note) {
         if (!m_roll_iterators[note].is_end()) {
             if (m_roll_iterators[note]->on_sample == m_time) {
@@ -44,64 +50,22 @@ void Track::fill_sample(Sample& sample)
                     m_roll_iterators[note] = m_roll_notes[note].begin();
             }
         }
-
-        switch (m_envelope[note]) {
-        case Done:
-            continue;
-        case Attack:
-            m_power[note] += m_attack_step;
-            if (m_power[note] >= 1) {
-                m_power[note] = 1;
-                m_envelope[note] = Decay;
-            }
-            break;
-        case Decay:
-            m_power[note] -= m_decay_step;
-            if (m_power[note] < m_sustain_level)
-                m_power[note] = m_sustain_level;
-            break;
-        case Release:
-            m_power[note] -= m_release_step[note];
-            if (m_power[note] <= 0) {
-                m_power[note] = 0;
-                m_envelope[note] = Done;
-                continue;
-            }
-            break;
-        default:
-            VERIFY_NOT_REACHED();
-        }
-
-        Audio::Frame note_sample;
-        switch (m_wave) {
-        case Wave::Sine:
-            note_sample = sine(note);
-            break;
-        case Wave::Saw:
-            note_sample = saw(note);
-            break;
-        case Wave::Square:
-            note_sample = square(note);
-            break;
-        case Wave::Triangle:
-            note_sample = triangle(note);
-            break;
-        case Wave::Noise:
-            note_sample = noise(note);
-            break;
-        case Wave::RecordedSample:
-            note_sample = recorded_sample(note);
-            break;
-        default:
-            VERIFY_NOT_REACHED();
-        }
-        new_sample.left += note_sample.left * m_power[note] * NumericLimits<i16>::max() * volume_factor * (static_cast<double>(volume()) / volume_max);
-        new_sample.right += note_sample.right * m_power[note] * NumericLimits<i16>::max() * volume_factor * (static_cast<double>(volume()) / volume_max);
     }
 
-    auto new_sample_dsp = LibDSP::Signal(LibDSP::Sample { new_sample.left / NumericLimits<i16>::max(), new_sample.right / NumericLimits<i16>::max() });
-    auto delayed_sample = m_delay->process(new_sample_dsp).get<LibDSP::Sample>();
+    auto playing_notes = LibDSP::RollNotes {};
 
+    for (size_t i = 0; i < note_count; ++i) {
+        auto& notes_at_pitch = m_roll_notes[i];
+        for (auto& note : notes_at_pitch) {
+            if (note.is_playing(m_time))
+                playing_notes.set(i, note);
+        }
+    }
+
+    auto synthesized_sample = m_synth->process(playing_notes).get<LibDSP::Sample>();
+    auto delayed_sample = m_delay->process(synthesized_sample).get<LibDSP::Sample>();
+
+    // HACK: Convert to old Piano datastructures
     new_sample.left = delayed_sample.left * NumericLimits<i16>::max();
     new_sample.right = delayed_sample.right * NumericLimits<i16>::max();
 

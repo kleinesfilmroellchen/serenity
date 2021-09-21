@@ -122,6 +122,12 @@ struct Frame {
         right += other.right;
         return *this;
     }
+    constexpr Frame& operator+=(double other)
+    {
+        left += other;
+        right += other;
+        return *this;
+    }
 
     constexpr Frame operator+(Frame const& other)
     {

@@ -11,6 +11,7 @@
 #include <AK/Variant.h>
 #include <AK/Vector.h>
 #include <LibAudio/Buffer.h>
+#include <LibDSP/Envelope.h>
 
 namespace LibDSP {
 
@@ -20,12 +21,44 @@ using Sample = Audio::Frame;
 Sample const SAMPLE_OFF = { 0.0, 0.0 };
 
 struct RollNote {
-    u32 length() const { return (off_sample - on_sample) + 1; }
+    constexpr u32 length() const { return (off_sample - on_sample) + 1; }
 
     u32 on_sample;
     u32 off_sample;
     u8 pitch;
     i8 velocity;
+
+    Envelope to_envelope(u32 time, u32 attack_samples, u32 decay_samples, u32 release_samples)
+    {
+        i64 time_since_end = static_cast<i64>(time) - static_cast<i64>(off_sample);
+        // We're before the end of this note.
+        if (time_since_end < 0) {
+            i64 time_since_start = static_cast<i64>(time) - static_cast<i64>(on_sample);
+            if (time_since_start < 0)
+                return {};
+
+            if (time_since_start < attack_samples) {
+                if (attack_samples == 0)
+                    return Envelope::from_attack(0);
+                return Envelope::from_attack(static_cast<double>(time_since_start) / static_cast<double>(attack_samples));
+            }
+            if (time_since_start < attack_samples + decay_samples) {
+                if (decay_samples == 0)
+                    return Envelope::from_decay(0);
+                return Envelope::from_decay(static_cast<double>(time_since_start - attack_samples) / static_cast<double>(decay_samples));
+            }
+            // This is a note-dependent value!
+            u32 sustain_samples = length() - attack_samples - decay_samples;
+            return Envelope::from_sustain(static_cast<double>(time_since_start - attack_samples - decay_samples) / static_cast<double>(sustain_samples));
+        }
+
+        // Overshot the release time
+        if (time_since_end > release_samples)
+            return {};
+        return Envelope::from_release(static_cast<double>(time_since_end) / static_cast<double>(release_samples));
+    }
+
+    constexpr bool is_playing(u32 time) { return on_sample <= time && time <= off_sample; }
 };
 
 enum class SignalType : u8 {
@@ -34,43 +67,15 @@ enum class SignalType : u8 {
     Note
 };
 
-struct Signal : public Variant<Sample, OrderedHashMap<RollNote>> {
+using RollNotes = OrderedHashMap<u8, RollNote>;
+
+struct Signal : public Variant<Sample, RollNotes> {
     using Variant::Variant;
     ALWAYS_INLINE SignalType type() const
     {
-        return has<Sample>() ? SignalType::Sample : has<OrderedHashMap<RollNote>>() ? SignalType::Note
-                                                                                    : SignalType::Invalid;
+        return has<Sample>() ? SignalType::Sample : has<RollNotes>() ? SignalType::Note
+                                                                     : SignalType::Invalid;
     }
-};
-
-struct Envelope {
-    Envelope() = default;
-    Envelope(double env)
-        : envelope(env)
-    {
-    }
-
-    bool is_attack() const { return 0 <= envelope && envelope < 1; }
-    double attack() const { return clamp(envelope, 0, 1); }
-    void set_attack(double offset) { envelope = offset; }
-
-    bool is_decay() const { return 1 <= envelope && envelope < 2; }
-    double decay() const { return clamp(envelope, 1, 2) - 1; }
-    void set_decay(double offset) { envelope = 1 + offset; }
-
-    bool is_sustain() const { return 2 <= envelope && envelope < 3; }
-    double sustain() const { return clamp(envelope, 2, 3) - 2; }
-    void set_sustain(double offset) { envelope = 2 + offset; }
-
-    bool is_release() const { return 3 <= envelope && envelope < 4; }
-    double release() const { return clamp(envelope, 3, 4) - 3; }
-    void set_release(double offset) { envelope = 3 + offset; }
-
-    bool is_active() const { return 0 <= envelope && envelope < 4; }
-
-    void reset() { envelope = -1; }
-
-    double envelope { -1 };
 };
 
 // Equal temperament, A = 440Hz

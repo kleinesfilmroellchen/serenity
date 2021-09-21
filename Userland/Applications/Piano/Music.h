@@ -38,15 +38,6 @@ enum Switch {
     On,
 };
 
-struct RollNote {
-    u32 length() const { return (off_sample - on_sample) + 1; }
-
-    u32 on_sample;
-    u32 off_sample;
-    u8 pitch;
-    i8 velocity;
-};
-
 enum Direction {
     Down,
     Up,
