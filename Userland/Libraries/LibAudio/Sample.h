@@ -17,21 +17,21 @@ using namespace AK::Exponentials;
 // Reference: https://www.dr-lex.be/info-stuff/volumecontrols.html
 // We use the curve `factor = a * exp(b * change)`,
 // where change is the input fraction we want to change by,
-// a = 1/1000, b = ln(1000) = 6.908 and factor is the multiplier used.
-// The value 1000 represents the dynamic range in sound pressure, which corresponds to 60 dB(A).
-// This is a good dynamic range because it can represent all loudness values from
-// 30 dB(A) (barely hearable with background noise)
-// to 90 dB(A) (almost too loud to hear and about the reasonable limit of actual sound equipment).
-//
+// The dynamic range is based on the bit depth which is currently set to
+// 16 bit. This might change in the future and can be changed later.
+// This dynamic range gives us ~96.3 dB of dB range.
+// Reference: https://en.wikipedia.org/wiki/DBFS
+
+constexpr double BIT_DEPTH = 16;
+constexpr double DYNAMIC_RANGE_DB = 20.0 * log10(AK::pow(2.0, BIT_DEPTH));
+constexpr double DYNAMIC_RANGE = AK::pow(10.0, DYNAMIC_RANGE_DB * 0.05);
+constexpr double VOLUME_A = 1 / DYNAMIC_RANGE;
+double const VOLUME_B = log(DYNAMIC_RANGE);
+
 // Format ranges:
 // - Linear:        0.0 to 1.0
 // - Logarithmic:   0.0 to 1.0
-// - dB:          -60.0 to 0.0
-
-constexpr double DYNAMIC_RANGE = 1000;
-constexpr double DYNAMIC_RANGE_DB = 60;
-constexpr double VOLUME_A = 1 / DYNAMIC_RANGE;
-double const VOLUME_B = log(DYNAMIC_RANGE);
+// - dB:         ~-96.3 to 0.0
 
 ALWAYS_INLINE double linear_to_log(double const change)
 {
