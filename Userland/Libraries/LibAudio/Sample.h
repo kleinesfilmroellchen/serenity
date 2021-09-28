@@ -26,31 +26,43 @@ constexpr double BIT_DEPTH = 16;
 constexpr double DYNAMIC_RANGE_DB = 20.0 * log10(AK::pow(2.0, BIT_DEPTH));
 constexpr double DYNAMIC_RANGE = AK::pow(10.0, DYNAMIC_RANGE_DB * 0.05);
 constexpr double VOLUME_A = 1 / DYNAMIC_RANGE;
-double const VOLUME_B = log(DYNAMIC_RANGE);
+constexpr double VOLUME_B = log(DYNAMIC_RANGE);
 
 // Format ranges:
 // - Linear:        0.0 to 1.0
 // - Logarithmic:   0.0 to 1.0
 // - dB:         ~-96.3 to 0.0
 
-ALWAYS_INLINE double linear_to_amplitude(double const value)
+ALWAYS_INLINE constexpr double linear_to_amplitude_impl(double const value)
 {
-    // Linear slope at the lower values to avoid asymptotic behaviour
-    // NOTE: These values are dependent on the dynamic range and thus the bit depth.
-    if (value < 0.05)
-        return value * 0.028;
-
     return VOLUME_A * exp(VOLUME_B * value);
 }
 
-ALWAYS_INLINE double amplitude_to_linear(double const amplitude)
+ALWAYS_INLINE constexpr double amplitude_to_linear_impl(double const amplitude)
 {
-    // Linear slope at the lower values to avoid asymptotic behaviour
-    // NOTE: These values are dependent on the dynamic range and thus the bit depth.
-    if (amplitude < 0.1)
-        return amplitude * 50;
-
     return log(amplitude / VOLUME_A) / VOLUME_B;
+}
+
+// Since the functions to calculate linear values to amplitude and vice versa are logarithmic
+// we add a linear slope at the lower values to avoid asymptotic behavior.
+// These constants define where we start that slope.
+constexpr double LINEAR_FALLOFF_THRESHOLD = 0.1;
+constexpr double LINEAR_FALLOFF_SLOPE = linear_to_amplitude_impl(LINEAR_FALLOFF_THRESHOLD) / LINEAR_FALLOFF_THRESHOLD;
+
+ALWAYS_INLINE constexpr double linear_to_amplitude(double const value)
+{
+    if (value < LINEAR_FALLOFF_THRESHOLD)
+        return value * LINEAR_FALLOFF_SLOPE;
+
+    return linear_to_amplitude_impl(value);
+}
+
+ALWAYS_INLINE constexpr double amplitude_to_linear(double const amplitude)
+{
+    if (amplitude < LINEAR_FALLOFF_THRESHOLD)
+        return amplitude / LINEAR_FALLOFF_SLOPE;
+
+    return amplitude_to_linear_impl(amplitude);
 }
 
 ALWAYS_INLINE double db_to_linear(double const dB)
