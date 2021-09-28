@@ -35,14 +35,16 @@ double const VOLUME_B = log(DYNAMIC_RANGE);
 
 ALWAYS_INLINE double linear_to_log(double const change)
 {
-    // TODO: Add linear slope around 0
-    return VOLUME_A * exp(VOLUME_B * change);
+    // Linear slope the first 3 dB to avoid asymptotic behaviour
+    // TODO: Can this be done more effectively?
+    return change < 0.05 ? change * 0.028 : VOLUME_A * exp(VOLUME_B * change);
 }
 
 ALWAYS_INLINE double log_to_linear(double const val)
 {
-    // TODO: Add linear slope around 0
-    return log(val / VOLUME_A) / VOLUME_B;
+    // Linear slope at val < 0.1 to avoid asymptotic behaviour
+    // TODO: Can this be done more effectively?
+    return val < 0.1 ? val * 50 : log(val / VOLUME_A) / VOLUME_B;
 }
 
 ALWAYS_INLINE double db_to_linear(double const dB)
