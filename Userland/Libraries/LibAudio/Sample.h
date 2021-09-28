@@ -9,6 +9,7 @@
 #pragma once
 
 #include <AK/Math.h>
+#include <math.h>
 
 namespace Audio {
 using namespace AK::Exponentials;
@@ -67,12 +68,18 @@ ALWAYS_INLINE constexpr double amplitude_to_linear(double const amplitude)
 
 ALWAYS_INLINE double db_to_linear(double const dB)
 {
+    if (dB < -DYNAMIC_RANGE_DB)
+        return 0;
+
     return (dB + DYNAMIC_RANGE_DB) / DYNAMIC_RANGE_DB;
 }
 
-ALWAYS_INLINE double linear_to_db(double const val)
+ALWAYS_INLINE double linear_to_db(double const value)
 {
-    return val * DYNAMIC_RANGE_DB - DYNAMIC_RANGE_DB;
+    if (value == 0)
+        return -static_cast<double>(INFINITY);
+
+    return value * DYNAMIC_RANGE_DB - DYNAMIC_RANGE_DB;
 }
 
 // A single sample in an audio buffer.
