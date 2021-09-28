@@ -84,6 +84,17 @@ ALWAYS_INLINE constexpr double linear_to_db(double const value, double const dB_
     return value * dB_range - dB_range + dB_headroom;
 }
 
+// db <-> amplitude can be used for audio visualizations
+ALWAYS_INLINE constexpr double db_to_amplitude(double const dB)
+{
+    return AK::pow(10.0, 0.05 * dB);
+}
+
+ALWAYS_INLINE constexpr double amplitude_to_db(double const amplitude)
+{
+    return 20.0 * log10(amplitude);
+}
+
 // A single sample in an audio buffer.
 // Values are floating point, and should range from -1.0 to +1.0
 struct Sample {
