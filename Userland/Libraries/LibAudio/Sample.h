@@ -33,18 +33,24 @@ double const VOLUME_B = log(DYNAMIC_RANGE);
 // - Logarithmic:   0.0 to 1.0
 // - dB:         ~-96.3 to 0.0
 
-ALWAYS_INLINE double linear_to_log(double const change)
+ALWAYS_INLINE double linear_to_amplitude(double const value)
 {
-    // Linear slope the first 3 dB to avoid asymptotic behaviour
-    // TODO: Can this be done more effectively?
-    return change < 0.05 ? change * 0.028 : VOLUME_A * exp(VOLUME_B * change);
+    // Linear slope at the lower values to avoid asymptotic behaviour
+    // NOTE: These values are dependent on the dynamic range and thus the bit depth.
+    if (value < 0.05)
+        return value * 0.028;
+
+    return VOLUME_A * exp(VOLUME_B * value);
 }
 
-ALWAYS_INLINE double log_to_linear(double const val)
+ALWAYS_INLINE double amplitude_to_linear(double const amplitude)
 {
-    // Linear slope at val < 0.1 to avoid asymptotic behaviour
-    // TODO: Can this be done more effectively?
-    return val < 0.1 ? val * 50 : log(val / VOLUME_A) / VOLUME_B;
+    // Linear slope at the lower values to avoid asymptotic behaviour
+    // NOTE: These values are dependent on the dynamic range and thus the bit depth.
+    if (amplitude < 0.1)
+        return amplitude * 50;
+
+    return log(amplitude / VOLUME_A) / VOLUME_B;
 }
 
 ALWAYS_INLINE double db_to_linear(double const dB)
@@ -91,7 +97,7 @@ struct Sample {
 
     ALWAYS_INLINE Sample& log_multiply(double const change)
     {
-        double factor = linear_to_log(change);
+        double factor = linear_to_amplitude(change);
         left *= factor;
         right *= factor;
         return *this;
@@ -99,15 +105,15 @@ struct Sample {
 
     ALWAYS_INLINE Sample log_multiplied(double const volume_change) const
     {
-        Sample new_frame { left, right };
-        new_frame.log_multiply(volume_change);
-        return new_frame;
+        Sample new_sample { left, right };
+        new_sample.log_multiply(volume_change);
+        return new_sample;
     }
 
     ALWAYS_INLINE Sample& log_pan(double const pan)
     {
-        left *= linear_to_log(min(pan * -1 + 1.0, 1.0));
-        right *= linear_to_log(min(pan + 1.0, 1.0));
+        left *= linear_to_amplitude(min(pan * -1 + 1.0, 1.0));
+        right *= linear_to_amplitude(min(pan + 1.0, 1.0));
         return *this;
     }
 
