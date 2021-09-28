@@ -30,9 +30,11 @@ constexpr double VOLUME_A = 1 / DYNAMIC_RANGE;
 constexpr double VOLUME_B = log(DYNAMIC_RANGE);
 
 // Format ranges:
-// - Linear:        0.0 to 1.0
-// - Logarithmic:   0.0 to 1.0
-// - dB:         ~-96.3 to 0.0
+// - Linear:          0.0 to 1.0
+// - Amplitude:       0.0 to 1.0
+// - dB(linear):   ~-96.3 to 0.0 (At max)
+// - dB(amplitude):  -inf to 0.0
+// - Panning:        -1.0 to 1.0 (Left to Right)
 
 ALWAYS_INLINE constexpr double linear_to_amplitude_impl(double const value)
 {
@@ -129,18 +131,22 @@ struct Sample {
         return new_sample;
     }
 
-    ALWAYS_INLINE Sample& log_pan(double const pan)
+    // Constant power panning
+    ALWAYS_INLINE Sample& pan(double const position)
     {
-        left *= linear_to_amplitude(min(pan * -1 + 1.0, 1.0));
-        right *= linear_to_amplitude(min(pan + 1.0, 1.0));
+        constexpr double pi_over_2 = AK::Pi<double> * 0.5;
+        constexpr double root_over_2 = AK::sqrt(2.0) * 0.5;
+        double const angle = position * pi_over_2 * 0.5;
+        left *= root_over_2 * (AK::cos(angle) - AK::sin(angle));
+        right *= root_over_2 * (AK::cos(angle) + AK::sin(angle));
         return *this;
     }
 
-    ALWAYS_INLINE Sample log_pan(double const pan) const
+    ALWAYS_INLINE Sample panned(double const position) const
     {
-        Sample new_frame { left, right };
-        new_frame.log_pan(pan);
-        return new_frame;
+        Sample new_sample { left, right };
+        new_sample.pan(position);
+        return new_sample;
     }
 
     constexpr Sample& operator*=(double const mult)
