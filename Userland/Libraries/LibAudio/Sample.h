@@ -24,10 +24,11 @@ using namespace AK::Exponentials;
 // Reference: https://en.wikipedia.org/wiki/DBFS
 
 constexpr double BIT_DEPTH = 16;
-constexpr double DYNAMIC_RANGE_DB = 20.0 * log10(AK::pow(2.0, BIT_DEPTH));
-constexpr double DYNAMIC_RANGE = AK::pow(10.0, DYNAMIC_RANGE_DB * 0.05);
-constexpr double VOLUME_A = 1 / DYNAMIC_RANGE;
-constexpr double VOLUME_B = log(DYNAMIC_RANGE);
+// FIXME: This is basically constexpr but clang doesn't believe us.
+double const DYNAMIC_RANGE_DB = 20.0 * log10(AK::pow(2.0, BIT_DEPTH));
+double const DYNAMIC_RANGE = AK::pow(10.0, DYNAMIC_RANGE_DB * 0.05);
+double const VOLUME_A = 1 / DYNAMIC_RANGE;
+double const VOLUME_B = log(DYNAMIC_RANGE);
 
 // Format ranges:
 // - Linear:          0.0 to 1.0
@@ -36,12 +37,12 @@ constexpr double VOLUME_B = log(DYNAMIC_RANGE);
 // - dB(amplitude):  -inf to 0.0
 // - Panning:        -1.0 to 1.0 (Left to Right)
 
-ALWAYS_INLINE constexpr double linear_to_amplitude_impl(double const value)
+ALWAYS_INLINE double linear_to_amplitude_impl(double const value)
 {
     return VOLUME_A * exp(VOLUME_B * value);
 }
 
-ALWAYS_INLINE constexpr double amplitude_to_linear_impl(double const amplitude)
+ALWAYS_INLINE double amplitude_to_linear_impl(double const amplitude)
 {
     return log(amplitude / VOLUME_A) / VOLUME_B;
 }
@@ -49,10 +50,10 @@ ALWAYS_INLINE constexpr double amplitude_to_linear_impl(double const amplitude)
 // Since the functions to calculate linear values to amplitude and vice versa are logarithmic
 // we add a linear slope at the lower values to avoid asymptotic behavior.
 // These constants define where we start that slope.
-constexpr double LINEAR_FALLOFF_THRESHOLD = 0.1;
-constexpr double LINEAR_FALLOFF_SLOPE = linear_to_amplitude_impl(LINEAR_FALLOFF_THRESHOLD) / LINEAR_FALLOFF_THRESHOLD;
+double const LINEAR_FALLOFF_THRESHOLD = 0.1;
+double const LINEAR_FALLOFF_SLOPE = linear_to_amplitude_impl(LINEAR_FALLOFF_THRESHOLD) / LINEAR_FALLOFF_THRESHOLD;
 
-ALWAYS_INLINE constexpr double linear_to_amplitude(double const value)
+ALWAYS_INLINE double linear_to_amplitude(double const value)
 {
     if (value < LINEAR_FALLOFF_THRESHOLD)
         return value * LINEAR_FALLOFF_SLOPE;
@@ -60,7 +61,7 @@ ALWAYS_INLINE constexpr double linear_to_amplitude(double const value)
     return linear_to_amplitude_impl(value);
 }
 
-ALWAYS_INLINE constexpr double amplitude_to_linear(double const amplitude)
+ALWAYS_INLINE double amplitude_to_linear(double const amplitude)
 {
     if (amplitude < LINEAR_FALLOFF_THRESHOLD)
         return amplitude / LINEAR_FALLOFF_SLOPE;
@@ -68,7 +69,7 @@ ALWAYS_INLINE constexpr double amplitude_to_linear(double const amplitude)
     return amplitude_to_linear_impl(amplitude);
 }
 
-ALWAYS_INLINE constexpr double db_to_linear(double const dB, double const dB_headroom = 0.0, double const dB_range = DYNAMIC_RANGE_DB)
+ALWAYS_INLINE double db_to_linear(double const dB, double const dB_headroom = 0.0, double const dB_range = DYNAMIC_RANGE_DB)
 {
     if (dB < -dB_range)
         return 0;
@@ -76,7 +77,7 @@ ALWAYS_INLINE constexpr double db_to_linear(double const dB, double const dB_hea
     return (dB + dB_range - dB_headroom) / dB_range;
 }
 
-ALWAYS_INLINE constexpr double linear_to_db(double const value, double const dB_headroom = 0.0, double const dB_range = DYNAMIC_RANGE_DB)
+ALWAYS_INLINE double linear_to_db(double const value, double const dB_headroom = 0.0, double const dB_range = DYNAMIC_RANGE_DB)
 {
     if (value == 0)
         return -static_cast<double>(INFINITY);
@@ -85,12 +86,12 @@ ALWAYS_INLINE constexpr double linear_to_db(double const value, double const dB_
 }
 
 // db <-> amplitude can be used for audio visualizations
-ALWAYS_INLINE constexpr double db_to_amplitude(double const dB)
+ALWAYS_INLINE double db_to_amplitude(double const dB)
 {
     return AK::pow(10.0, 0.05 * dB);
 }
 
-ALWAYS_INLINE constexpr double amplitude_to_db(double const amplitude)
+ALWAYS_INLINE double amplitude_to_db(double const amplitude)
 {
     return 20.0 * log10(amplitude);
 }
@@ -145,8 +146,8 @@ struct Sample {
     // Constant power panning
     ALWAYS_INLINE Sample& pan(double const position)
     {
-        constexpr double pi_over_2 = AK::Pi<double> * 0.5;
-        constexpr double root_over_2 = AK::sqrt(2.0) * 0.5;
+        double const pi_over_2 = AK::Pi<double> * 0.5;
+        double const root_over_2 = AK::sqrt(2.0) * 0.5;
         double const angle = position * pi_over_2 * 0.5;
         left *= root_over_2 * (AK::cos(angle) - AK::sin(angle));
         right *= root_over_2 * (AK::cos(angle) + AK::sin(angle));
