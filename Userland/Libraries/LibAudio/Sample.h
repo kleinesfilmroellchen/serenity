@@ -66,20 +66,20 @@ ALWAYS_INLINE constexpr double amplitude_to_linear(double const amplitude)
     return amplitude_to_linear_impl(amplitude);
 }
 
-ALWAYS_INLINE double db_to_linear(double const dB)
+ALWAYS_INLINE constexpr double db_to_linear(double const dB, double const dB_headroom = 0.0, double const dB_range = DYNAMIC_RANGE_DB)
 {
-    if (dB < -DYNAMIC_RANGE_DB)
+    if (dB < -dB_range)
         return 0;
 
-    return (dB + DYNAMIC_RANGE_DB) / DYNAMIC_RANGE_DB;
+    return (dB + dB_range - dB_headroom) / dB_range;
 }
 
-ALWAYS_INLINE double linear_to_db(double const value)
+ALWAYS_INLINE constexpr double linear_to_db(double const value, double const dB_headroom = 0.0, double const dB_range = DYNAMIC_RANGE_DB)
 {
     if (value == 0)
         return -static_cast<double>(INFINITY);
 
-    return value * DYNAMIC_RANGE_DB - DYNAMIC_RANGE_DB;
+    return value * dB_range - dB_range + dB_headroom;
 }
 
 // A single sample in an audio buffer.
