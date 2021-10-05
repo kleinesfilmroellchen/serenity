@@ -93,6 +93,9 @@ public:
     Result(const Result& other) = default;
     ~Result() = default;
 
+    void result() {};
+    void release_result() {};
+
     ErrorType& error()
     {
         return m_error.value();
