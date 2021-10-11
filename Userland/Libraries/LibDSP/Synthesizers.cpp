@@ -17,10 +17,10 @@ namespace LibDSP::Synthesizers {
 Classic::Classic(NonnullRefPtr<Transport> transport)
     : LibDSP::SynthesizerProcessor(transport)
     , m_waveform("Waveform"sv, Waveform::Saw)
-    , m_attack("Attack"sv, 0, 2000, 5)
-    , m_decay("Decay"sv, 0, 20'000, 80)
-    , m_sustain("Sustain"sv, 0, 1, 0.725)
-    , m_release("Release", 0, 6'000, 120)
+    , m_attack("Attack"sv, 0.01, 2000, 5, true)
+    , m_decay("Decay"sv, 0.01, 20'000, 80, true)
+    , m_sustain("Sustain"sv, 0.001, 1, 0.725, false)
+    , m_release("Release", 0.01, 6'000, 120, true)
 {
     m_parameters.append(m_waveform);
     m_parameters.append(m_attack);

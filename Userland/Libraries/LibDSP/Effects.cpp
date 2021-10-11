@@ -11,9 +11,9 @@ namespace LibDSP::Effects {
 
 Delay::Delay(NonnullRefPtr<Transport> transport)
     : EffectProcessor(move(transport))
-    , m_delay_decay("Decay"sv, 0.01, 0.99, 0.33)
-    , m_delay_time("Delay Time"sv, 3, 2000, 900)
-    , m_dry_gain("Dry"sv, 0, 1, 0.9)
+    , m_delay_decay("Decay"sv, 0.01, 0.99, 0.33, false)
+    , m_delay_time("Delay Time"sv, 3, 2000, 900, true)
+    , m_dry_gain("Dry"sv, 0, 1, 0.9, false)
 {
 
     m_parameters.append(m_delay_decay);
@@ -53,8 +53,8 @@ Signal Delay::process_impl(Signal const& input_signal)
 
 Mastering::Mastering(NonnullRefPtr<Transport> transport)
     : EffectProcessor(move(transport))
-    , m_master_volume("Master"sv, 0, 1, 1)
-    , m_pan("Pan"sv, -1, 1, 0)
+    , m_master_volume("Master"sv, 0, 1, 1, false)
+    , m_pan("Pan"sv, -1, 1, 0, false)
     , m_mute("Mute"sv, false)
 {
     m_parameters.append(m_master_volume);
