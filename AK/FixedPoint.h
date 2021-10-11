@@ -329,6 +329,29 @@ struct Formatter<FixedPoint<precision, Underlying>> : StandardFormatter {
     }
 };
 
+// HACK: It's a good approximation to do the calculation with a double intermediate.
+#define MAKE_FIXEDPOINT_FUNC(name)                                                \
+    template<size_t size, Integral Underlying>                                    \
+    constexpr FixedPoint<size, Underlying> name(FixedPoint<size, Underlying> arg) \
+    {                                                                             \
+        return name(static_cast<double>(arg));                                    \
+    }
+
+namespace Exponentials {
+MAKE_FIXEDPOINT_FUNC(log)
+MAKE_FIXEDPOINT_FUNC(log2)
+MAKE_FIXEDPOINT_FUNC(log10)
+MAKE_FIXEDPOINT_FUNC(exp)
+MAKE_FIXEDPOINT_FUNC(exp2)
+}
+
+using Exponentials::exp;
+using Exponentials::exp2;
+using Exponentials::log;
+using Exponentials::log10;
+using Exponentials::log2;
+
+#undef MAKE_FIXEDPOINT_FUNC
 }
 
 using AK::FixedPoint;
