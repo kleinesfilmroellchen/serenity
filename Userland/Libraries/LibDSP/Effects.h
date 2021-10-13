@@ -6,10 +6,12 @@
 
 #pragma once
 
-#include "Processor.h"
-#include "ProcessorParameter.h"
-#include "Transport.h"
+#include <AK/NonnullRefPtr.h>
 #include <AK/Types.h>
+#include <LibDSP/DelayLine.h>
+#include <LibDSP/Processor.h>
+#include <LibDSP/ProcessorParameter.h>
+#include <LibDSP/Transport.h>
 
 namespace LibDSP::Effects {
 
@@ -25,10 +27,39 @@ private:
 
     ProcessorRangeParameter m_delay_decay;
     ProcessorRangeParameter m_delay_time;
-    ProcessorRangeParameter m_dry_gain;
+    ProcessorRangeParameter m_input_gain;
+    ProcessorRangeParameter m_wet_dry;
 
-    Vector<Sample> m_delay_buffer;
-    size_t m_delay_index { 0 };
+    DelayLine m_delay_line;
+};
+
+// Adapted from:
+// https://ccrma.stanford.edu/~jos/pasp/Artificial_Reverberation.html
+// (and the sub pages)
+// http://www.earlevel.com/main/1997/01/19/a-bit-about-reverb/
+class Reverb : public EffectProcessor {
+public:
+    Reverb(NonnullRefPtr<Transport>);
+
+private:
+    virtual Signal process_impl(Signal const&) override;
+
+    ProcessorRangeParameter m_early_reflection_gain;
+    ProcessorRangeParameter m_early_reflection_time;
+    // Schroeder allpass
+    ProcessorRangeParameter m_reverb_decay;
+    ProcessorRangeParameter m_shape;
+
+    // Tapped Delay Line (TDL) for the early reflections
+    DelayLine m_early_reflector_tdl;
+
+    // Allpass filter (3 stages) for late reverb through feedback and feedforward comb filters
+    // Length 1051
+    DelayLine m_allpass_line_1;
+    // Length 337
+    DelayLine m_allpass_line_2;
+    // Length 113
+    DelayLine m_allpass_line_3;
 };
 
 // A simple effect that applies volume, mute and pan to its input signal.

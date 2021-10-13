@@ -5,6 +5,7 @@
  */
 
 #include "Effects.h"
+#include <AK/Types.h>
 #include <math.h>
 
 namespace LibDSP::Effects {
@@ -13,12 +14,14 @@ Delay::Delay(NonnullRefPtr<Transport> transport)
     : EffectProcessor(move(transport))
     , m_delay_decay("Decay"sv, 0.01, 0.99, 0.33)
     , m_delay_time("Delay Time"sv, 3, 2000, 900)
-    , m_dry_gain("Dry"sv, 0, 1, 0.9)
+    , m_input_gain("Input Gain"sv, 0, 1, 0.9)
+    , m_wet_dry("Wet/Dry"sv, 0, 1, 0.8)
 {
 
+    m_parameters.append(m_input_gain);
     m_parameters.append(m_delay_decay);
     m_parameters.append(m_delay_time);
-    m_parameters.append(m_dry_gain);
+    m_parameters.append(m_wet_dry);
 }
 
 void Delay::handle_delay_time_change()
@@ -26,10 +29,7 @@ void Delay::handle_delay_time_change()
     // We want a delay buffer that can hold samples filling the specified number of milliseconds.
     double seconds = static_cast<double>(m_delay_time) / 1000.0;
     size_t sample_count = ceil(seconds * m_transport->sample_rate());
-    if (sample_count != m_delay_buffer.size()) {
-        m_delay_buffer.resize(sample_count, true);
-        m_delay_index %= max(m_delay_buffer.size(), 1);
-    }
+    m_delay_line.resize(sample_count);
 }
 
 Signal Delay::process_impl(Signal const& input_signal)
@@ -38,17 +38,13 @@ Signal Delay::process_impl(Signal const& input_signal)
 
     Sample const& in = input_signal.get<Sample>();
     Sample out;
-    out += in.log_multiplied(static_cast<double>(m_dry_gain));
-    out += m_delay_buffer[m_delay_index].log_multiplied(m_delay_decay);
+    out += in.log_multiplied(m_input_gain);
+    out += m_delay_line[0_z] * m_delay_decay;
 
-    // This is also convenient for disabling the delay effect by setting the buffer size to 0
-    if (m_delay_buffer.size() >= 1)
-        m_delay_buffer[m_delay_index++] = out;
+    m_delay_line[0_z] = out;
+    ++m_delay_line;
 
-    if (m_delay_index >= m_delay_buffer.size())
-        m_delay_index = 0;
-
-    return Signal(out);
+    return Signal(Sample::fade(out, in, m_wet_dry));
 }
 
 Mastering::Mastering(NonnullRefPtr<Transport> transport)

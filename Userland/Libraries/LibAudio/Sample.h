@@ -138,9 +138,8 @@ struct Sample {
 
     ALWAYS_INLINE Sample log_multiplied(double const volume_change) const
     {
-        Sample new_sample { left, right };
-        new_sample.log_multiply(volume_change);
-        return new_sample;
+        double factor = linear_to_amplitude(volume_change);
+        return { left * factor, right * factor };
     }
 
     // Constant power panning
@@ -161,6 +160,23 @@ struct Sample {
         return new_sample;
     }
 
+    // Constant power fading between to samples, compare panning
+    ALWAYS_INLINE Sample fade(Sample const other, double const position) const
+    {
+        double const pi_over_2 = AK::Pi<double> * 0.5;
+        double const root_over_2 = AK::sqrt(2.0) * 0.5;
+        double const angle = position * pi_over_2 * 0.5;
+        Sample out = *this;
+        out += *this * (root_over_2 * (AK::cos(angle) - AK::sin(angle)));
+        out += other * (root_over_2 * (AK::cos(angle) + AK::sin(angle)));
+        return out;
+    }
+
+    static ALWAYS_INLINE Sample fade(Sample const first, Sample const second, double const position)
+    {
+        return first.fade(second, position);
+    }
+
     constexpr Sample& operator*=(double const mult)
     {
         left *= mult;
@@ -168,7 +184,7 @@ struct Sample {
         return *this;
     }
 
-    constexpr Sample operator*(double const mult)
+    constexpr Sample operator*(double const mult) const
     {
         return { left * mult, right * mult };
     }
@@ -186,7 +202,7 @@ struct Sample {
         return *this;
     }
 
-    constexpr Sample operator+(Sample const& other)
+    constexpr Sample operator+(Sample const& other) const
     {
         return { left + other.left, right + other.right };
     }

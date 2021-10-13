@@ -3,6 +3,7 @@ set(SOURCES
     Track.cpp
     Effects.cpp
     Synthesizers.cpp
+    DelayLine.cpp
 )
 
 serenity_lib(LibDSP dsp)

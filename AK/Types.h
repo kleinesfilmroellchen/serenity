@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Concepts.h>
 #include <AK/IterationDecision.h>
 #include <AK/Platform.h>
 #include <AK/StdLibExtras.h>
@@ -23,6 +24,10 @@ using i8 = __INT8_TYPE__;
 
 using size_t = __SIZE_TYPE__;
 using ssize_t = MakeSigned<size_t>;
+consteval size_t operator"" _z(unsigned long long i)
+{
+    return static_cast<size_t>(i);
+}
 
 using ptrdiff_t = __PTRDIFF_TYPE__;
 
