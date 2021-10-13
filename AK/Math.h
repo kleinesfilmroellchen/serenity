@@ -35,6 +35,12 @@ template<size_t value>
 constexpr size_t product_odd() { return value * product_odd<value - 2>(); }
 }
 
+#ifdef __clang__
+#    define CONSTEXPR ALWAYS_INLINE
+#else
+#    define CONSTEXPR constexpr
+#endif
+
 #define CONSTEXPR_STATE(function, args...)        \
     if (is_constant_evaluated()) {                \
         if (IsSame<T, long double>)               \
@@ -47,7 +53,7 @@ constexpr size_t product_odd() { return value * product_odd<value - 2>(); }
 
 #define INTEGER_BUILTIN(name)                         \
     template<Integral T>                              \
-    constexpr T name(T x)                             \
+    CONSTEXPR T name(T x)                             \
     {                                                 \
         if constexpr (sizeof(T) == sizeof(long long)) \
             return __builtin_##name##ll(x);           \
@@ -62,7 +68,7 @@ INTEGER_BUILTIN(popcnt);
 
 namespace Division {
 template<FloatingPoint T>
-constexpr T fmod(T x, T y)
+CONSTEXPR T fmod(T x, T y)
 {
     CONSTEXPR_STATE(fmod, x, y);
     u16 fpu_status;
@@ -76,7 +82,7 @@ constexpr T fmod(T x, T y)
     return x;
 }
 template<FloatingPoint T>
-constexpr T remainder(T x, T y)
+CONSTEXPR T remainder(T x, T y)
 {
     CONSTEXPR_STATE(remainder, x, y);
     u16 fpu_status;
@@ -95,7 +101,7 @@ using Division::fmod;
 using Division::remainder;
 
 template<FloatingPoint T>
-constexpr T sqrt(T x)
+CONSTEXPR T sqrt(T x)
 {
     CONSTEXPR_STATE(sqrt, x);
     T res;
@@ -106,7 +112,7 @@ constexpr T sqrt(T x)
 }
 
 template<FloatingPoint T>
-constexpr T cbrt(T x)
+CONSTEXPR T cbrt(T x)
 {
     CONSTEXPR_STATE(cbrt, x);
     if (__builtin_isinf(x) || x == 0)
@@ -146,7 +152,7 @@ constexpr T cbrt(T x)
 }
 
 template<FloatingPoint T>
-constexpr T fabs(T x)
+CONSTEXPR T fabs(T x)
 {
     if (is_constant_evaluated())
         return x < 0 ? -x : x;
@@ -159,13 +165,13 @@ constexpr T fabs(T x)
 namespace Trigonometry {
 
 template<FloatingPoint T>
-constexpr T hypot(T x, T y)
+CONSTEXPR T hypot(T x, T y)
 {
     return sqrt(x * x + y * y);
 }
 
 template<FloatingPoint T>
-constexpr T sin(T angle)
+CONSTEXPR T sin(T angle)
 {
     CONSTEXPR_STATE(sin, angle);
     T ret;
@@ -177,7 +183,7 @@ constexpr T sin(T angle)
 }
 
 template<FloatingPoint T>
-constexpr T cos(T angle)
+CONSTEXPR T cos(T angle)
 {
     CONSTEXPR_STATE(cos, angle);
     T ret;
@@ -189,7 +195,7 @@ constexpr T cos(T angle)
 }
 
 template<FloatingPoint T>
-constexpr T tan(T angle)
+CONSTEXPR T tan(T angle)
 {
     CONSTEXPR_STATE(tan, angle);
     double ret, one;
@@ -202,7 +208,7 @@ constexpr T tan(T angle)
 }
 
 template<FloatingPoint T>
-constexpr T atan(T value)
+CONSTEXPR T atan(T value)
 {
     CONSTEXPR_STATE(atan, value);
 
@@ -216,7 +222,7 @@ constexpr T atan(T value)
 }
 
 template<FloatingPoint T>
-constexpr T asin(T x)
+CONSTEXPR T asin(T x)
 {
     CONSTEXPR_STATE(asin, x);
     if (x > 1 || x < -1)
@@ -245,7 +251,7 @@ constexpr T asin(T x)
 }
 
 template<FloatingPoint T>
-constexpr T acos(T value)
+CONSTEXPR T acos(T value)
 {
     CONSTEXPR_STATE(acos, value);
 
@@ -254,7 +260,7 @@ constexpr T acos(T value)
 }
 
 template<FloatingPoint T>
-constexpr T atan2(T y, T x)
+CONSTEXPR T atan2(T y, T x)
 {
     CONSTEXPR_STATE(atan2, y, x);
 
@@ -280,7 +286,7 @@ using Trigonometry::tan;
 namespace Exponentials {
 
 template<FloatingPoint T>
-constexpr T log(T x)
+CONSTEXPR T log(T x)
 {
     CONSTEXPR_STATE(log, x);
 
@@ -295,7 +301,7 @@ constexpr T log(T x)
 }
 
 template<FloatingPoint T>
-constexpr T log2(T x)
+CONSTEXPR T log2(T x)
 {
     CONSTEXPR_STATE(log2, x);
 
@@ -310,13 +316,13 @@ constexpr T log2(T x)
 }
 
 template<Integral T>
-constexpr T log2(T x)
+CONSTEXPR T log2(T x)
 {
     return x ? 8 * sizeof(T) - clz(x) : 0;
 }
 
 template<FloatingPoint T>
-constexpr T log10(T x)
+CONSTEXPR T log10(T x)
 {
     CONSTEXPR_STATE(log10, x);
 
@@ -331,7 +337,7 @@ constexpr T log10(T x)
 }
 
 template<FloatingPoint T>
-constexpr T exp(T exponent)
+CONSTEXPR T exp(T exponent)
 {
     CONSTEXPR_STATE(exp, exponent);
 
@@ -351,7 +357,7 @@ constexpr T exp(T exponent)
 }
 
 template<FloatingPoint T>
-constexpr T exp2(T exponent)
+CONSTEXPR T exp2(T exponent)
 {
     CONSTEXPR_STATE(exp2, exponent);
 
@@ -368,7 +374,7 @@ constexpr T exp2(T exponent)
     return res;
 }
 template<Integral T>
-constexpr T exp2(T exponent)
+CONSTEXPR T exp2(T exponent)
 {
     return 1u << exponent;
 }
@@ -383,7 +389,7 @@ using Exponentials::log2;
 namespace Hyperbolic {
 
 template<FloatingPoint T>
-constexpr T sinh(T x)
+CONSTEXPR T sinh(T x)
 {
     T exponentiated = exp<T>(x);
     if (x > 0)
@@ -392,7 +398,7 @@ constexpr T sinh(T x)
 }
 
 template<FloatingPoint T>
-constexpr T cosh(T x)
+CONSTEXPR T cosh(T x)
 {
     CONSTEXPR_STATE(cosh, x);
 
@@ -403,7 +409,7 @@ constexpr T cosh(T x)
 }
 
 template<FloatingPoint T>
-constexpr T tanh(T x)
+CONSTEXPR T tanh(T x)
 {
     if (x > 0) {
         T exponentiated = exp<T>(2 * x);
@@ -415,19 +421,19 @@ constexpr T tanh(T x)
 }
 
 template<FloatingPoint T>
-constexpr T asinh(T x)
+CONSTEXPR T asinh(T x)
 {
     return log<T>(x + sqrt<T>(x * x + 1));
 }
 
 template<FloatingPoint T>
-constexpr T acosh(T x)
+CONSTEXPR T acosh(T x)
 {
     return log<T>(x + sqrt<T>(x * x - 1));
 }
 
 template<FloatingPoint T>
-constexpr T atanh(T x)
+CONSTEXPR T atanh(T x)
 {
     return log<T>((1 + x) / (1 - x)) / (T)2.0l;
 }
@@ -442,7 +448,7 @@ using Hyperbolic::sinh;
 using Hyperbolic::tanh;
 
 template<FloatingPoint T>
-constexpr T pow(T x, T y)
+CONSTEXPR T pow(T x, T y)
 {
     CONSTEXPR_STATE(pow, x, y);
     // fixme I am naive
@@ -467,6 +473,7 @@ constexpr T pow(T x, T y)
     return exp2<T>(y * log2<T>(x));
 }
 
+#undef CONSTEXPR
 #undef CONSTEXPR_STATE
 #undef INTEGER_BUILTIN
 
