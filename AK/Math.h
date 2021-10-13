@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Concepts.h>
+#include <AK/NumericLimits.h>
 #include <AK/StdLibExtraDetails.h>
 #include <AK/Types.h>
 
@@ -318,7 +319,7 @@ CONSTEXPR T log2(T x)
 template<Integral T>
 CONSTEXPR T log2(T x)
 {
-    return x ? 8 * sizeof(T) - clz(x) : 0;
+    return x ? (8 * sizeof(T) - clz(x) - 1) : NumericLimits<T>::min();
 }
 
 template<FloatingPoint T>
