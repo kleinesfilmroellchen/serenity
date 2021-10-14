@@ -43,12 +43,15 @@ public:
 
 private:
     virtual Signal process_impl(Signal const&) override;
+    void handle_early_time_change();
 
     ProcessorRangeParameter m_early_reflection_gain;
     ProcessorRangeParameter m_early_reflection_time;
+    ProcessorRangeParameter m_early_reflection_density;
     // Schroeder allpass
     ProcessorRangeParameter m_reverb_decay;
     ProcessorRangeParameter m_shape;
+    ProcessorRangeParameter m_wet_dry;
 
     // Tapped Delay Line (TDL) for the early reflections
     DelayLine m_early_reflector_tdl;
@@ -60,6 +63,9 @@ private:
     DelayLine m_allpass_line_2;
     // Length 113
     DelayLine m_allpass_line_3;
+
+    void generate_prime_database();
+    Vector<unsigned> m_primes;
 };
 
 // A simple effect that applies volume, mute and pan to its input signal.

@@ -5,6 +5,8 @@
  */
 
 #include "Effects.h"
+#include "AK/NonnullRefPtr.h"
+#include "LibDSP/Processor.h"
 #include <AK/Types.h>
 #include <math.h>
 
@@ -45,6 +47,102 @@ Signal Delay::process_impl(Signal const& input_signal)
     ++m_delay_line;
 
     return Signal(Sample::fade(out, in, m_wet_dry));
+}
+
+Reverb::Reverb(NonnullRefPtr<Transport> transport)
+    : EffectProcessor(move(transport))
+    , m_early_reflection_gain("Early reflections"sv, 0, 1, 1)
+    , m_early_reflection_time("Early reflection duration"sv, 0.01, 300, 100)
+    , m_early_reflection_density("Early reflection density"sv, 3, 20, 5)
+    , m_reverb_decay("Decay"sv, 0, 1, 0.7)
+    , m_shape("Shape"sv, 0, 1, 0.5)
+    , m_wet_dry("Wet/Dry"sv, 0, 1, 0.6)
+{
+    m_parameters.append(m_early_reflection_gain);
+    m_parameters.append(m_early_reflection_time);
+    m_parameters.append(m_reverb_decay);
+    m_parameters.append(m_shape);
+    m_parameters.append(m_wet_dry);
+
+    generate_prime_database();
+    dbgln("Primes: {}", m_primes);
+}
+
+// Essentially a flipped boolean: make yes the default
+enum PrimeState : u8 {
+    Yes = 0,
+    No = 1,
+};
+
+void Reverb::generate_prime_database()
+{
+    double seconds = static_cast<double>(m_early_reflection_time.max_value()) / 1000.0;
+    size_t max_sample_count = ceil(seconds * m_transport->sample_rate());
+
+    Vector<PrimeState> is_prime;
+    is_prime.resize(max_sample_count);
+    is_prime[0] = is_prime[1] = No;
+    // Prime sieve
+    for (size_t i = 2; i < max_sample_count / 2; ++i) {
+        if (is_prime[i] == No)
+            continue;
+        for (size_t multiple = i * 2; multiple < max_sample_count; multiple += i)
+            is_prime[multiple] = No;
+    }
+    // Let's worst-case assume that every third number is a prime; that's a reasonable overestimate into the low 1000's.
+    m_primes.ensure_capacity(max_sample_count / 3);
+    for (size_t i = 0; i < max_sample_count; ++i) {
+        if (is_prime[i] == Yes)
+            m_primes.unchecked_append(static_cast<unsigned>(i));
+    }
+}
+
+// Process a Schroeder allpass section.
+// Conventions adopted from digital signal processing, see
+// https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
+static Sample process_allpass(DelayLine& delay, double g, Sample& x)
+{
+    Sample delay_out = delay[0_z];
+    // v is the signal going into the delay line and forward-fed to the output
+    Sample v = delay_out * g + x;
+
+    delay[0_z] = v;
+    ++delay;
+
+    // y
+    x = v * -g + delay_out;
+}
+
+void Reverb::handle_early_time_change()
+{
+    double seconds = static_cast<double>(m_early_reflection_time) / 1000.0;
+    size_t sample_count = ceil(seconds * m_transport->sample_rate());
+    m_early_reflector_tdl.resize(sample_count);
+}
+
+Signal Reverb::process_impl(Signal const& input_signal)
+{
+    handle_early_time_change();
+
+    Sample const& in = input_signal.get<Sample>();
+
+    // Early reflections
+    Sample early;
+
+    // More taps = more echo
+    for (size_t i = 0; i < ceil(m_early_reflection_density); ++i) {
+        TODO();
+        early += m_early_reflector_tdl[0_z];
+        m_early_reflector_tdl[0_z] = early * ++m_early_reflector_tdl;
+    }
+
+    // Late reverb
+    Sample late = m_early_reflector_tdl[0_z];
+    process_allpass(m_allpass_line_1, m_reverb_decay, late);
+    process_allpass(m_allpass_line_2, m_reverb_decay, late);
+    process_allpass(m_allpass_line_3, m_reverb_decay, late);
+
+    return Signal(Sample::fade(early + late, in, m_wet_dry));
 }
 
 Mastering::Mastering(NonnullRefPtr<Transport> transport)
