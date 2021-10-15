@@ -41,6 +41,8 @@ class Function;
 
 template<typename F>
 inline constexpr bool IsFunctionPointer = (IsPointer<F> && IsFunction<RemovePointer<F>>);
+template<typename F>
+concept FunctionPointer = IsFunctionPointer<F>;
 
 // Not a function pointer, and not an lvalue reference.
 template<typename F>

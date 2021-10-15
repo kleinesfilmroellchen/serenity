@@ -43,11 +43,17 @@ Sample& DelayLine::operator[](ssize_t index)
 
 Sample const& DelayLine::operator[](size_t index) const
 {
+    // Unlikely special-case for zero-size delay lines
+    if (m_buffer.size() < 1) [[unlikely]]
+        return Sample::empty();
     size_t real_index = (index + m_offset) % size();
     return m_buffer[real_index];
 }
 Sample& DelayLine::operator[](size_t index)
 {
+    // Unlikely special-case for zero-size delay lines
+    if (m_buffer.size() < 1) [[unlikely]]
+        return m_default_sample;
     size_t real_index = (index + m_offset) % size();
     return m_buffer[real_index];
 }

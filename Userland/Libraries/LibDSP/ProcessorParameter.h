@@ -8,8 +8,8 @@
 
 #include <AK/FixedPoint.h>
 #include <AK/Format.h>
-#include <AK/Forward.h>
 #include <AK/Types.h>
+#include <AK/Weakable.h>
 #include <LibCore/Object.h>
 #include <LibDSP/Music.h>
 
@@ -25,8 +25,17 @@ enum ParameterType : u32 {
     Enum,
 };
 
+template<typename ValueT>
+class ProcessorParameterClient {
+public:
+    virtual void value_changed(ValueT) { }
+
+protected:
+    virtual ~ProcessorParameterClient() = default;
+};
+
 // Processors have modifiable parameters that should be presented to the UI in a uniform way without requiring the processor itself to implement custom interfaces.
-class ProcessorParameter {
+class ProcessorParameter : public Weakable<ProcessorParameter> {
 public:
     ProcessorParameter(String name, ParameterType type)
         : m_name(move(name))
@@ -76,8 +85,8 @@ public:
     void set_value(ParameterT value)
     {
         set_value_sneaky(value, LibDSP::Detail::ProcessorParameterSetValueTag {});
-        if (did_change_value)
-            did_change_value(value);
+        for (auto client : m_clients)
+            client->value_changed(m_value);
     }
 
     // Use of this function is discouraged. It doesn't notify the value listener.
@@ -87,10 +96,21 @@ public:
             m_value = value;
     }
 
-    Function<void(ParameterT const&)> did_change_value;
+    void add_client(ProcessorParameterClient<ParameterT>& client)
+    {
+        VERIFY(!m_clients.contains(&client));
+        m_clients.set(&client);
+    }
+    void remove_client(ProcessorParameterClient<ParameterT>& client)
+    {
+        VERIFY(m_clients.contains(&client));
+        m_clients.remove(&client);
+    }
 
 protected:
     ParameterT m_value;
+
+    HashTable<ProcessorParameterClient<ParameterT>*> m_clients;
 };
 }
 

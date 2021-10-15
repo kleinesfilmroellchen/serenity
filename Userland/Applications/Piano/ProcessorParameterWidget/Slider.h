@@ -7,18 +7,23 @@
 #pragma once
 
 #include "WidgetWithLabel.h"
+#include <AK/WeakPtr.h>
 #include <LibDSP/ProcessorParameter.h>
 #include <LibGUI/Label.h>
 #include <LibGUI/Slider.h>
 #include <LibGfx/Orientation.h>
 
 class ProcessorParameterSlider : public GUI::Slider
-    , public WidgetWithLabel {
+    , public WidgetWithLabel
+    , public LibDSP::ProcessorParameterClient<LibDSP::ParameterFixedPoint> {
     C_OBJECT(ProcessorParameterSlider);
 
 public:
     ProcessorParameterSlider(Orientation, LibDSP::ProcessorRangeParameter&, RefPtr<GUI::Label>);
+    ~ProcessorParameterSlider();
+
+    void value_changed(LibDSP::ParameterFixedPoint) override;
 
 protected:
-    LibDSP::ProcessorRangeParameter& m_parameter;
+    WeakPtr<LibDSP::ProcessorRangeParameter> m_parameter;
 };

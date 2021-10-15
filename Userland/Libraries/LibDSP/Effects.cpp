@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include "Effects.h"
-#include "AK/NonnullRefPtr.h"
-#include "LibDSP/Processor.h"
+#include <AK/NonnullRefPtr.h>
 #include <AK/Types.h>
+#include <LibDSP/Effects.h>
+#include <LibDSP/Processor.h>
 #include <math.h>
 
 namespace LibDSP::Effects {
@@ -19,11 +19,19 @@ Delay::Delay(NonnullRefPtr<Transport> transport)
     , m_input_gain("Input Gain"sv, 0, 1, 0.9)
     , m_wet_dry("Wet/Dry"sv, 0, 1, 0.8)
 {
-
     m_parameters.append(m_input_gain);
     m_parameters.append(m_delay_decay);
     m_parameters.append(m_delay_time);
     m_parameters.append(m_wet_dry);
+
+    m_transport->add_client(*this);
+    m_delay_time.add_client(*this);
+}
+
+Delay::~Delay()
+{
+    m_transport->remove_client(*this);
+    m_delay_time.remove_client(*this);
 }
 
 void Delay::handle_delay_time_change()
@@ -36,17 +44,13 @@ void Delay::handle_delay_time_change()
 
 Signal Delay::process_impl(Signal const& input_signal)
 {
-    handle_delay_time_change();
-
     Sample const& in = input_signal.get<Sample>();
-    Sample out;
-    out += in.log_multiplied(m_input_gain);
-    out += m_delay_line[0_z] * m_delay_decay;
+    Sample delayed = m_delay_line[0_z] * m_delay_decay;
 
-    m_delay_line[0_z] = out;
+    m_delay_line[0_z] = delayed + in * m_input_gain;
     ++m_delay_line;
 
-    return Signal(Sample::fade(out, in, m_wet_dry));
+    return Signal(Sample::fade(delayed, in, m_wet_dry));
 }
 
 Reverb::Reverb(NonnullRefPtr<Transport> transport)
@@ -97,10 +101,15 @@ void Reverb::generate_prime_database()
     }
 }
 
+void Reverb::generate_tapoff_indices()
+{
+    TODO();
+}
+
 // Process a Schroeder allpass section.
 // Conventions adopted from digital signal processing, see
 // https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
-static Sample process_allpass(DelayLine& delay, double g, Sample& x)
+static void process_allpass(DelayLine& delay, double g, Sample& x)
 {
     Sample delay_out = delay[0_z];
     // v is the signal going into the delay line and forward-fed to the output
@@ -131,9 +140,9 @@ Signal Reverb::process_impl(Signal const& input_signal)
 
     // More taps = more echo
     for (size_t i = 0; i < ceil(m_early_reflection_density); ++i) {
-        TODO();
         early += m_early_reflector_tdl[0_z];
-        m_early_reflector_tdl[0_z] = early * ++m_early_reflector_tdl;
+        //m_early_reflector_tdl[0_z] = early;
+        ++m_early_reflector_tdl;
     }
 
     // Late reverb
@@ -162,7 +171,7 @@ Signal Mastering::process_impl(Signal const& input_signal)
     Sample out;
 
     if (m_mute.value()) {
-        return Signal(out);
+        return Signal(in);
     }
 
     out += in.panned(static_cast<double>(m_pan));

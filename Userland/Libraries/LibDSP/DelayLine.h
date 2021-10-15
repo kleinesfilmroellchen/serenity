@@ -43,6 +43,8 @@ public:
 
 private:
     Vector<Sample> m_buffer;
+    // For some exceptional situations, we just need a dummy sample reference.
+    Sample m_default_sample;
     size_t m_offset { 0 };
 };
 

@@ -101,6 +101,12 @@ ALWAYS_INLINE double amplitude_to_db(double const amplitude)
 struct Sample {
     constexpr Sample() = default;
 
+    static Sample const& empty()
+    {
+        static Sample const the_empty_sample {};
+        return the_empty_sample;
+    }
+
     // For mono
     constexpr Sample(double left)
         : left(left)
@@ -160,19 +166,22 @@ struct Sample {
         return new_sample;
     }
 
-    // Constant power fading between to samples, compare panning
-    ALWAYS_INLINE Sample fade(Sample const other, double const position) const
+    // Constant power fading between two samples (0 = only this, 1 = only other), compare panning
+    ALWAYS_INLINE Sample fade(Sample const other, double position) const
     {
+        // We get in 0..1, but the constant power algorithm needs -1..1
+        position = position * 2 - 1;
         double const pi_over_2 = AK::Pi<double> * 0.5;
         double const root_over_2 = AK::sqrt(2.0) * 0.5;
         double const angle = position * pi_over_2 * 0.5;
-        Sample out = *this;
-        out += *this * (root_over_2 * (AK::cos(angle) - AK::sin(angle)));
-        out += other * (root_over_2 * (AK::cos(angle) + AK::sin(angle)));
+        double self_gain = (root_over_2 * (AK::cos(angle) - AK::sin(angle)));
+        double other_gain = (root_over_2 * (AK::cos(angle) + AK::sin(angle)));
+        Sample out = *this * self_gain;
+        out += other * other_gain;
         return out;
     }
 
-    static ALWAYS_INLINE Sample fade(Sample const first, Sample const second, double const position)
+    static ALWAYS_INLINE Sample fade(Sample const first, Sample const second, double position)
     {
         return first.fade(second, position);
     }

@@ -17,12 +17,20 @@ namespace LibDSP::Effects {
 
 // A simple digital delay effect using a delay buffer.
 // This is based on Piano's old built-in delay.
-class Delay : public EffectProcessor {
+class Delay : public EffectProcessor
+    , public ProcessorParameterClient<ParameterFixedPoint>
+    , public TransportClient {
 public:
     Delay(NonnullRefPtr<Transport>);
+    ~Delay();
 
 private:
     virtual Signal process_impl(Signal const&) override;
+
+    // We need to change the buffer if either the delay time changed or the sample rate changed.
+    virtual void value_changed(ParameterFixedPoint) override { handle_delay_time_change(); }
+    virtual void sample_rate_changed(u32) override { handle_delay_time_change(); }
+
     void handle_delay_time_change();
 
     ProcessorRangeParameter m_delay_decay;
@@ -55,17 +63,16 @@ private:
 
     // Tapped Delay Line (TDL) for the early reflections
     DelayLine m_early_reflector_tdl;
+    // Use prime numbers for the tapoff points
+    void generate_prime_database();
+    void generate_tapoff_indices();
+    Vector<unsigned> m_tdl_indices;
+    Vector<unsigned> m_primes;
 
     // Allpass filter (3 stages) for late reverb through feedback and feedforward comb filters
-    // Length 1051
-    DelayLine m_allpass_line_1;
-    // Length 337
-    DelayLine m_allpass_line_2;
-    // Length 113
-    DelayLine m_allpass_line_3;
-
-    void generate_prime_database();
-    Vector<unsigned> m_primes;
+    DelayLine m_allpass_line_1 { 1051 };
+    DelayLine m_allpass_line_2 { 337 };
+    DelayLine m_allpass_line_3 { 113 };
 };
 
 // A simple effect that applies volume, mute and pan to its input signal.
