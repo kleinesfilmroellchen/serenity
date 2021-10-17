@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Concepts.h>
 #include <LibDSP/DelayLine.h>
 
 namespace LibDSP {
@@ -21,41 +22,6 @@ void DelayLine::resize(size_t new_capacity)
 
     m_buffer.resize(new_capacity, true);
     m_offset %= size();
-}
-
-// There's a separate signed implementation because it may be slower than the unsigned implementation.
-Sample const& DelayLine::operator[](ssize_t index) const
-{
-    ssize_t real_index = m_offset + index;
-    while (real_index < 0)
-        real_index += size();
-    real_index %= size();
-    return m_buffer[real_index];
-}
-Sample& DelayLine::operator[](ssize_t index)
-{
-    ssize_t real_index = m_offset + index;
-    while (real_index < 0)
-        real_index += size();
-    real_index %= size();
-    return m_buffer[real_index];
-}
-
-Sample const& DelayLine::operator[](size_t index) const
-{
-    // Unlikely special-case for zero-size delay lines
-    if (m_buffer.size() < 1) [[unlikely]]
-        return Sample::empty();
-    size_t real_index = (index + m_offset) % size();
-    return m_buffer[real_index];
-}
-Sample& DelayLine::operator[](size_t index)
-{
-    // Unlikely special-case for zero-size delay lines
-    if (m_buffer.size() < 1) [[unlikely]]
-        return m_default_sample;
-    size_t real_index = (index + m_offset) % size();
-    return m_buffer[real_index];
 }
 
 DelayLine& DelayLine::operator++()

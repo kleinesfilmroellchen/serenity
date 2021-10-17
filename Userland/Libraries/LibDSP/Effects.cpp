@@ -45,9 +45,9 @@ void Delay::handle_delay_time_change()
 Signal Delay::process_impl(Signal const& input_signal)
 {
     Sample const& in = input_signal.get<Sample>();
-    Sample delayed = m_delay_line[0_z] * m_delay_decay;
+    Sample delayed = m_delay_line[0] * m_delay_decay;
 
-    m_delay_line[0_z] = delayed + in * m_input_gain;
+    m_delay_line[0] = delayed + in * m_input_gain;
     ++m_delay_line;
 
     return Signal(Sample::fade(delayed, in, m_wet_dry));
@@ -66,14 +66,11 @@ Reverb::Reverb(NonnullRefPtr<Transport> transport)
     m_parameters.append(m_early_reflection_time);
     m_parameters.append(m_early_reflection_density);
     m_parameters.append(m_reverb_decay);
-    m_parameters.append(m_shape);
     m_parameters.append(m_wet_dry);
 
     generate_prime_database();
-    dbgln("Primes: {}", m_primes);
     handle_early_time_change();
     generate_tapoff_indices();
-    dbgln("TDL indices: {}", m_tdl_indices);
 
     m_early_reflection_density.add_client(*this);
     m_early_reflection_time.add_client(*this);
@@ -159,13 +156,13 @@ void Reverb::generate_tapoff_indices()
 // https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
 static void process_allpass(DelayLine& delay, double g, Sample& x)
 {
-    Sample v_delayed = delay[0_z];
+    Sample v_delayed = delay[0];
     // v is the signal going into the delay line and forward-fed to the output
     Sample v = x + v_delayed * g;
     // y
     x = v * -g + v_delayed;
 
-    delay[0_z] = v;
+    delay[0] = v;
     ++delay;
 }
 
@@ -173,19 +170,20 @@ Signal Reverb::process_impl(Signal const& input_signal)
 {
     Sample const& in = input_signal.get<Sample>();
 
-    // Early reflections
+    // Early reflections with a tapped delay line (TDL)
     Sample early;
-
+    double reflection_gain = m_early_reflection_gain;
     // More taps = more echo
-    for (size_t i = 0; i < floor(m_early_reflection_density); ++i) {
-        early += m_early_reflector_tdl[(ssize_t)-m_tdl_indices[i]];
+    for (size_t i = floor(m_early_reflection_density); i > 0; --i) {
+        early += m_early_reflector_tdl[-m_tdl_indices[i]] * reflection_gain;
+        // Later reflections are weaker
+        reflection_gain *= m_early_reflection_gain;
     }
-    early *= m_early_reflection_gain;
-    m_early_reflector_tdl[0_z] = in;
+    m_early_reflector_tdl[0] = in;
     ++m_early_reflector_tdl;
 
-    // Late reverb
-    Sample late = m_early_reflector_tdl[0_z];
+    // Late reverb with Schroeder allpass filters
+    Sample late = m_early_reflector_tdl[0];
     process_allpass(m_allpass_line_1, m_reverb_decay, late);
     process_allpass(m_allpass_line_2, m_reverb_decay, late);
     process_allpass(m_allpass_line_3, m_reverb_decay, late);

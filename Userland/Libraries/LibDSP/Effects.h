@@ -56,7 +56,6 @@ public:
     {
         handle_early_time_change();
         generate_tapoff_indices();
-        dbgln("TDL indices (regenerated): {}, TDL size: {}", m_tdl_indices, m_early_reflector_tdl.size());
     }
     virtual void sample_rate_changed(u32) override { value_changed(0); }
 

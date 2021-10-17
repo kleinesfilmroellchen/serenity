@@ -32,11 +32,25 @@ public:
 
     ALWAYS_INLINE size_t size() const { return max(m_buffer.size(), 1); }
 
-    // The delay line is always indexed relative to its current location
-    Sample const& operator[](ssize_t index) const;
-    Sample& operator[](ssize_t index);
-    Sample const& operator[](size_t index) const;
-    Sample& operator[](size_t index);
+    // The delay line is always indexed relative to its current location.
+    template<Integral SizeT>
+    Sample& operator[](SizeT index)
+    {
+        if (m_buffer.size() < 1) [[unlikely]]
+            return m_default_sample;
+        SizeT real_index = m_offset + index;
+        real_index %= size();
+        return m_buffer[static_cast<size_t>(real_index)];
+    }
+    template<Integral SizeT>
+    Sample const& operator[](SizeT index) const
+    {
+        if (m_buffer.size() < 1) [[unlikely]]
+            return Sample::empty();
+        SizeT real_index = m_offset + index;
+        real_index %= size();
+        return m_buffer[static_cast<size_t>(real_index)];
+    }
 
     // Advance the delay line
     DelayLine& operator++();
