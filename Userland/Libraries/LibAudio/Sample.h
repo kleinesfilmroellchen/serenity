@@ -193,7 +193,7 @@ struct Sample {
         return *this;
     }
 
-    constexpr Sample operator*(double const mult) const
+    constexpr Sample operator*(double mult) const
     {
         return { left * mult, right * mult };
     }

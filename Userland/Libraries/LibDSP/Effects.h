@@ -45,9 +45,20 @@ private:
 // https://ccrma.stanford.edu/~jos/pasp/Artificial_Reverberation.html
 // (and the sub pages)
 // http://www.earlevel.com/main/1997/01/19/a-bit-about-reverb/
-class Reverb : public EffectProcessor {
+class Reverb : public EffectProcessor
+    , public ProcessorParameterClient<LibDSP::ParameterFixedPoint>
+    , public TransportClient {
 public:
     Reverb(NonnullRefPtr<Transport>);
+    ~Reverb();
+
+    virtual void value_changed(LibDSP::ParameterFixedPoint) override
+    {
+        handle_early_time_change();
+        generate_tapoff_indices();
+        dbgln("TDL indices (regenerated): {}, TDL size: {}", m_tdl_indices, m_early_reflector_tdl.size());
+    }
+    virtual void sample_rate_changed(u32) override { value_changed(0); }
 
 private:
     virtual Signal process_impl(Signal const&) override;
@@ -56,9 +67,8 @@ private:
     ProcessorRangeParameter m_early_reflection_gain;
     ProcessorRangeParameter m_early_reflection_time;
     ProcessorRangeParameter m_early_reflection_density;
-    // Schroeder allpass
+    // Schroeder allpass; "g" in the literature
     ProcessorRangeParameter m_reverb_decay;
-    ProcessorRangeParameter m_shape;
     ProcessorRangeParameter m_wet_dry;
 
     // Tapped Delay Line (TDL) for the early reflections

@@ -59,17 +59,32 @@ Reverb::Reverb(NonnullRefPtr<Transport> transport)
     , m_early_reflection_time("Early reflection duration"sv, 0.01, 300, 100)
     , m_early_reflection_density("Early reflection density"sv, 3, 20, 5)
     , m_reverb_decay("Decay"sv, 0, 1, 0.7)
-    , m_shape("Shape"sv, 0, 1, 0.5)
+    // TODO: Add a shape parameter that controls the Lowpass filter on the early reflections.
     , m_wet_dry("Wet/Dry"sv, 0, 1, 0.6)
 {
     m_parameters.append(m_early_reflection_gain);
     m_parameters.append(m_early_reflection_time);
+    m_parameters.append(m_early_reflection_density);
     m_parameters.append(m_reverb_decay);
     m_parameters.append(m_shape);
     m_parameters.append(m_wet_dry);
 
     generate_prime_database();
     dbgln("Primes: {}", m_primes);
+    handle_early_time_change();
+    generate_tapoff_indices();
+    dbgln("TDL indices: {}", m_tdl_indices);
+
+    m_early_reflection_density.add_client(*this);
+    m_early_reflection_time.add_client(*this);
+    m_transport->add_client(*this);
+}
+
+Reverb::~Reverb()
+{
+    m_early_reflection_density.remove_client(*this);
+    m_early_reflection_time.remove_client(*this);
+    m_transport->remove_client(*this);
 }
 
 // Essentially a flipped boolean: make yes the default
@@ -101,27 +116,6 @@ void Reverb::generate_prime_database()
     }
 }
 
-void Reverb::generate_tapoff_indices()
-{
-    TODO();
-}
-
-// Process a Schroeder allpass section.
-// Conventions adopted from digital signal processing, see
-// https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
-static void process_allpass(DelayLine& delay, double g, Sample& x)
-{
-    Sample delay_out = delay[0_z];
-    // v is the signal going into the delay line and forward-fed to the output
-    Sample v = delay_out * g + x;
-
-    delay[0_z] = v;
-    ++delay;
-
-    // y
-    x = v * -g + delay_out;
-}
-
 void Reverb::handle_early_time_change()
 {
     double seconds = static_cast<double>(m_early_reflection_time) / 1000.0;
@@ -129,21 +123,66 @@ void Reverb::handle_early_time_change()
     m_early_reflector_tdl.resize(sample_count);
 }
 
+// Generates the currently to-be-used tapoff indices.
+// They are all prime numbers, and should be spaced evenly within the early reflection time.
+// This means that the re-generation needs to happen when the early reflection time changes,
+// or the number of taps, indicated by the early reflection density, changes.
+void Reverb::generate_tapoff_indices()
+{
+    double seconds = static_cast<double>(m_early_reflection_time) / 1000.0;
+    size_t max_sample_count = ceil(seconds * m_transport->sample_rate());
+    // Find the maximum prime index, then choose evenly distributed indices.
+    // Therefore, the prime numbers aren't evenly distributed, but we don't want to spend a lot of time on an ideal solution.
+    size_t max_prime_index = 0;
+    while (max_prime_index < m_primes.size() && m_primes[max_prime_index] < max_sample_count) {
+        // There's at least one prime number between x and 2x (x ∈ ℕ), so we can skip considering the next prime.
+        if (m_primes[max_prime_index] < max_sample_count / 2)
+            max_prime_index += 2;
+        else
+            ++max_prime_index;
+    }
+    if (max_prime_index >= m_primes.size())
+        max_prime_index = m_primes.size() - 1;
+
+    auto number_of_primes = static_cast<size_t>(floor(m_early_reflection_density));
+    m_tdl_indices.clear_with_capacity();
+    // Once a large reflection density was chosen, this shouldn't allocate as we just keep the larger size.
+    m_tdl_indices.ensure_capacity(number_of_primes);
+    for (size_t i = 0; i < number_of_primes; ++i) {
+        auto prime_index = static_cast<size_t>(static_cast<double>(max_prime_index) / static_cast<double>(number_of_primes) * i);
+        m_tdl_indices.unchecked_append(m_primes[prime_index]);
+    }
+}
+
+// Process a Schroeder allpass section.
+// Conventions adopted from digital signal processing, see
+// https://ccrma.stanford.edu/~jos/pasp/Schroeder_Allpass_Sections.html
+static void process_allpass(DelayLine& delay, double g, Sample& x)
+{
+    Sample v_delayed = delay[0_z];
+    // v is the signal going into the delay line and forward-fed to the output
+    Sample v = x + v_delayed * g;
+    // y
+    x = v * -g + v_delayed;
+
+    delay[0_z] = v;
+    ++delay;
+}
+
 Signal Reverb::process_impl(Signal const& input_signal)
 {
-    handle_early_time_change();
-
     Sample const& in = input_signal.get<Sample>();
 
     // Early reflections
     Sample early;
 
     // More taps = more echo
-    for (size_t i = 0; i < ceil(m_early_reflection_density); ++i) {
-        early += m_early_reflector_tdl[0_z];
-        //m_early_reflector_tdl[0_z] = early;
-        ++m_early_reflector_tdl;
+    for (size_t i = 0; i < floor(m_early_reflection_density); ++i) {
+        early += m_early_reflector_tdl[(ssize_t)-m_tdl_indices[i]];
     }
+    early *= m_early_reflection_gain;
+    m_early_reflector_tdl[0_z] = in;
+    ++m_early_reflector_tdl;
 
     // Late reverb
     Sample late = m_early_reflector_tdl[0_z];
