@@ -174,7 +174,7 @@ Signal Reverb::process_impl(Signal const& input_signal)
     Sample early;
     double reflection_gain = m_early_reflection_gain;
     // More taps = more echo
-    for (size_t i = floor(m_early_reflection_density); i > 0; --i) {
+    for (ssize_t i = floor(m_early_reflection_density) - 1; i >= 0; --i) {
         early += m_early_reflector_tdl[-m_tdl_indices[i]] * reflection_gain;
         // Later reflections are weaker
         reflection_gain *= m_early_reflection_gain;
@@ -183,7 +183,7 @@ Signal Reverb::process_impl(Signal const& input_signal)
     ++m_early_reflector_tdl;
 
     // Late reverb with Schroeder allpass filters
-    Sample late = m_early_reflector_tdl[0];
+    Sample late = m_early_reflector_tdl[-m_tdl_indices[(size_t)floor(m_early_reflection_density) / 2]];
     process_allpass(m_allpass_line_1, m_reverb_decay, late);
     process_allpass(m_allpass_line_2, m_reverb_decay, late);
     process_allpass(m_allpass_line_3, m_reverb_decay, late);
