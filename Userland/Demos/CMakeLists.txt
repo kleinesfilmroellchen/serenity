@@ -1,3 +1,4 @@
+add_subdirectory(BadApple)
 add_subdirectory(CatDog)
 add_subdirectory(Cube)
 add_subdirectory(Eyes)

@@ -1,0 +1,4 @@
+[App]
+Name=Bad Apple
+Executable=/bin/BadApple
+Category=Demos
