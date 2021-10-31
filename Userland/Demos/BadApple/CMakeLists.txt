@@ -8,4 +8,4 @@ set(SOURCES
 )
 
 serenity_app(BadApple ICON app-badapple)
-target_link_libraries(BadApple LibGUI LibCore LibGfx)
+target_link_libraries(BadApple LibGUI LibCore LibGfx LibAudio)
