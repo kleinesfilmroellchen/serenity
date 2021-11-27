@@ -1,3 +1,7 @@
+Note for BadApple users: Run the `get-badapple` script in `Base/res/badapple` to generate frames and FLAC audio track. You need youtube-dl (Python package) and ffmpeg (`sudo your-package-manager install-cmd ffmpeg`). The script will ask you for the video URL of a Bad Apple upload; any page that youtube-dl can read (i.e. basically every page) is possible.
+
+I, kleines Filmröllchen, will stop maintaining this fork in November 2021. If something breaks while rebasing on the newest master branch, I will not fix it. This is mainly intended for educational purposes in relation with the video.
+
 # SerenityOS
 
 Graphical Unix-like operating system for x86 computers.
