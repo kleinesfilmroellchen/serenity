@@ -99,8 +99,10 @@ public:
     template<typename RequestType, typename... Args>
     OwnPtr<typename RequestType::ResponseType> send_sync_but_allow_failure(Args&&... args)
     {
+        dbgln("here 1.5");
         if (post_message(RequestType(forward<Args>(args)...)).is_error())
             return nullptr;
+        dbgln("here 4");
         return wait_for_specific_endpoint_message<typename RequestType::ResponseType, PeerEndpoint>();
     }
 

@@ -292,7 +292,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     auto create_applet = [&](GraphType graph_type, StringView spec) -> ErrorOr<void> {
         auto parts = spec.split_view(',');
 
-        dbgln("Create applet: {} with spec '{}'", (int)graph_type, spec);
+        outln("Create applet: {} with spec '{}'", (int)graph_type, spec);
 
         if (parts.size() != 2)
             return Error::from_string_literal("ResourceGraph: Applet spec is not composed of exactly 2 comma-separated parts"sv);
@@ -326,5 +326,6 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     TRY(Core::System::unveil("/bin/SystemMonitor", "x"));
     TRY(Core::System::unveil(nullptr, nullptr));
 
+    fflush(stdout);
     return app->exec();
 }

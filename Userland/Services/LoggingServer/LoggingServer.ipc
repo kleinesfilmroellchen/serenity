@@ -1,0 +1,6 @@
+#include <AK/String.h>
+
+endpoint LoggingServer
+{
+	create_logged_application(String application_name) => (IPC::File stdout_pipe, IPC::File stderr_pipe)
+}

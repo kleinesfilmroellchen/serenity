@@ -27,6 +27,7 @@ private:
         : m_server(move(server))
     {
         m_server->on_accept = [&](auto client_socket) {
+            dbgln("new client");
             auto client_id = ++m_next_client_id;
             (void)IPC::new_client_connection<ConnectionFromClientType>(move(client_socket), client_id);
         };

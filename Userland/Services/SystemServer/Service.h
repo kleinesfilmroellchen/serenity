@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "ConnectionToLoggingServer.h"
 #include <AK/RefPtr.h>
 #include <AK/String.h>
 #include <LibCore/Account.h>
@@ -27,7 +28,7 @@ public:
     void save_to(JsonObject&);
 
 private:
-    Service(Core::ConfigFile const&, StringView name);
+    Service(Core::ConfigFile const&, StringView name, RefPtr<ConnectionToLoggingServer>);
 
     void spawn(int socket_fd = -1);
 
@@ -46,8 +47,14 @@ private:
     String m_executable_path;
     // Extra arguments, starting from argv[1], to pass when exec'ing.
     Vector<String> m_extra_arguments;
+
     // File path to open as stdio fds.
     String m_stdio_file_path;
+    // Whether to attach logging standard output&error.
+    bool m_logging { false };
+    int m_log_stdout { -1 };
+    int m_log_stderr { -1 };
+
     int m_priority { 1 };
     // Whether we should re-launch it if it exits.
     bool m_keep_alive { false };
@@ -86,5 +93,6 @@ private:
     void setup_socket(SocketDescriptor&);
     void setup_sockets();
     void setup_notifier();
+    ErrorOr<void> setup_logging(RefPtr<ConnectionToLoggingServer>);
     void handle_socket_connection();
 };

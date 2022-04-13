@@ -27,6 +27,7 @@ ErrorOr<void> ConnectionBase::post_message(Message const& message)
 
 ErrorOr<void> ConnectionBase::post_message(MessageBuffer buffer)
 {
+    dbgln("here 1.6");
     // NOTE: If this connection is being shut down, but has not yet been destroyed,
     //       the socket will be closed. Don't try to send more messages.
     if (!m_socket->is_open())
@@ -49,11 +50,15 @@ ErrorOr<void> ConnectionBase::post_message(MessageBuffer buffer)
         warnln("fd passing is not supported on this platform, sorry :(");
 #endif
 
+    dbgln("here 1.7");
     ReadonlyBytes bytes_to_write { buffer.data.span() };
     while (!bytes_to_write.is_empty()) {
         auto maybe_nwritten = m_socket->write(bytes_to_write);
+        dbgln("here 1.8");
         if (maybe_nwritten.is_error()) {
+            dbgln("here 1.85");
             auto error = maybe_nwritten.release_error();
+            dbgln("{}", error);
             if (error.is_errno()) {
                 switch (error.code()) {
                 case EPIPE:
@@ -74,6 +79,7 @@ ErrorOr<void> ConnectionBase::post_message(MessageBuffer buffer)
         bytes_to_write = bytes_to_write.slice(maybe_nwritten.value());
     }
 
+    dbgln("here 1.9");
     m_responsiveness_timer->start();
     return {};
 }
@@ -179,6 +185,8 @@ ErrorOr<void> ConnectionBase::drain_messages_from_peer()
 
 OwnPtr<IPC::Message> ConnectionBase::wait_for_specific_endpoint_message_impl(u32 endpoint_magic, int message_id)
 {
+
+    dbgln("here 5");
     for (;;) {
         // Double check we don't already have the event waiting for us.
         // Otherwise we might end up blocked for a while for no reason.
@@ -196,7 +204,9 @@ OwnPtr<IPC::Message> ConnectionBase::wait_for_specific_endpoint_message_impl(u32
         wait_for_socket_to_become_readable();
         if (drain_messages_from_peer().is_error())
             break;
+        dbgln("here 7");
     }
+    dbgln("here 6");
     return {};
 }
 

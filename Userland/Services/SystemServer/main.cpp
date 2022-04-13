@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "ConnectionToLoggingServer.h"
 #include "Service.h"
 #include <AK/Assertions.h>
 #include <AK/ByteBuffer.h>
@@ -16,6 +17,7 @@
 #include <LibCore/Event.h>
 #include <LibCore/EventLoop.h>
 #include <LibCore/File.h>
+#include <LibCore/Stream.h>
 #include <LibCore/System.h>
 #include <LibMain/Main.h>
 #include <errno.h>
@@ -502,16 +504,29 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     auto config = (user)
         ? TRY(Core::ConfigFile::open_for_app("SystemServer"))
         : TRY(Core::ConfigFile::open_for_system("SystemServer"));
+    RefPtr<ConnectionToLoggingServer> logging_server = nullptr;
     for (auto name : config->groups()) {
-        auto service = Service::construct(*config, name);
+        dbgln("Trying to setup {}", name);
+        auto service = Service::construct(*config, name, logging_server);
+        // HACK: We rely on the logging server name here, as we have to start it before anything else is even constructed.
+        if (name == "LoggingServer" && service->is_enabled()) {
+            service->activate();
+            logging_server = TRY(ConnectionToLoggingServer::try_create());
+            logging_server->create_logged_application("blah");
+        }
+
         if (service->is_enabled())
             services.append(service);
+        dbgln("Appended service {}", service->name());
     }
 
     // After we've set them all up, activate them!
     dbgln("Activating {} services...", services.size());
-    for (auto& service : services)
-        service.activate();
+    for (auto& service : services) {
+        if (service.name() != "LoggingServer")
+            service.activate();
+    }
+    dbgln("Activated all services.");
 
     return event_loop.exec();
 }

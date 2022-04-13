@@ -10,6 +10,7 @@
 #include <AK/JsonArray.h>
 #include <AK/JsonObject.h>
 #include <AK/StringBuilder.h>
+#include <AK/Try.h>
 #include <LibCore/ConfigFile.h>
 #include <LibCore/Directory.h>
 #include <LibCore/File.h>
@@ -82,6 +83,24 @@ void Service::setup_notifier()
     m_socket_notifier->on_ready_to_read = [this] {
         handle_socket_connection();
     };
+}
+
+ErrorOr<void> Service::setup_logging(RefPtr<ConnectionToLoggingServer> logging_server)
+{
+    dbgln("trying to get fds for {}... ls null={}", name(), logging_server.is_null());
+    String name_copy = name();
+    auto result = logging_server->try_create_logged_application(move(name_copy));
+    dbgln("created logged application, result err={}", result.is_error());
+    if (result.is_error()) {
+        dbgln("Error!");
+        // FIXME: We can't use formatted errors here.
+        return Error::from_string_literal("IPC error"sv);
+    }
+    auto fds = result.release_value();
+    m_log_stderr = fds.take_stderr_pipe().take_fd();
+    m_log_stdout = fds.take_stdout_pipe().take_fd();
+    dbgln("got log pipes {}, {}", m_log_stdout, m_log_stderr);
+    return {};
 }
 
 void Service::handle_socket_connection()
@@ -180,6 +199,13 @@ void Service::spawn(int socket_fd)
             dup2(STDIN_FILENO, STDERR_FILENO);
         }
 
+        if (m_logging) {
+            dup2(m_log_stdout, STDOUT_FILENO);
+            dup2(m_log_stderr, STDERR_FILENO);
+
+            close(STDIN_FILENO);
+        }
+
         StringBuilder builder;
 
         if (socket_fd >= 0) {
@@ -270,7 +296,7 @@ void Service::did_exit(int exit_code)
     activate();
 }
 
-Service::Service(Core::ConfigFile const& config, StringView name)
+Service::Service(Core::ConfigFile const& config, StringView name, RefPtr<ConnectionToLoggingServer> logging_server)
     : Core::Object(nullptr)
 {
     VERIFY(config.has_group(name));
@@ -307,6 +333,7 @@ Service::Service(Core::ConfigFile const& config, StringView name)
     m_system_modes = config.read_entry(name, "SystemModes", "graphical").split(',');
     m_multi_instance = config.read_bool_entry(name, "MultiInstance");
     m_accept_socket_connections = config.read_bool_entry(name, "AcceptSocketConnections");
+    m_logging = config.read_bool_entry(name, "Logging", false);
 
     String socket_entry = config.read_entry(name, "Socket");
     String socket_permissions_entry = config.read_entry(name, "SocketPermissions", "0600");
@@ -341,6 +368,10 @@ Service::Service(Core::ConfigFile const& config, StringView name)
 
     if (is_enabled())
         setup_sockets();
+
+    dbgln("Almost done with {}, need to log={} ls null={}", name, m_logging, logging_server.is_null());
+    if (is_enabled() && m_logging && !logging_server.is_null())
+        MUST(setup_logging(logging_server));
 }
 
 void Service::save_to(JsonObject& json)
