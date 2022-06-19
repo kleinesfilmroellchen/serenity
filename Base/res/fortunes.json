@@ -183,5 +183,11 @@
     "author": "Agni",
     "url": "https://discord.com/channels/830522505605283862/859531354219872266/882660065474146304",
     "utc_time": 1630512958
+  },
+  {
+    "quote": "This is a test quote, I'm trying to restore the /quote feature to the Discord bot. If you see this in a PR, please close it immediately and inform @kleinesfilmroellchen.",
+    "author": "kleines Filmröllchen",
+    "url": "https://discord.com/channels/870263083686330378/870263085586321489/988100986155446273",
+    "utc_time": 1655653312
   }
 ]
