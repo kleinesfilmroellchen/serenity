@@ -48,6 +48,14 @@ void Threading::Thread::start()
     m_started = true;
 }
 
+ErrorOr<void, Threading::ThreadError> Threading::Thread::cancel()
+{
+    int rc = pthread_cancel(m_tid);
+    if (rc != 0)
+        return Threading::ThreadError { rc };
+    return {};
+}
+
 void Threading::Thread::detach()
 {
     VERIFY(!m_detached);

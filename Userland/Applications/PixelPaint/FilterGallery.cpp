@@ -73,6 +73,7 @@ FilterGallery::FilterGallery(GUI::Window* parent_window, ImageEditor* editor)
             return;
         }
 
+        m_selected_filter->cancellation_requested = nullptr;
         m_selected_filter->apply();
         done(ExecResult::OK);
     };

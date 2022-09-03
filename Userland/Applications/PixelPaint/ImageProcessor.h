@@ -21,6 +21,12 @@ class ImageProcessingCommand : public RefCounted<ImageProcessingCommand> {
 public:
     virtual void execute() = 0;
     virtual ~ImageProcessingCommand() = default;
+
+    void cancel();
+    bool is_cancelled() const;
+
+protected:
+    Atomic<bool> m_cancelled { false };
 };
 
 // A command applying a filter from a source to a target bitmap.
@@ -53,6 +59,7 @@ private:
 // A utility class that allows various PixelPaint systems to execute image processing commands asynchronously on another thread.
 class ImageProcessor final {
     friend struct AK::SingletonInstanceCreator<ImageProcessor>;
+    friend class ImageProcessingCommand;
 
 public:
     static ImageProcessor* the();

@@ -5,8 +5,26 @@
  */
 
 #include "ImageProcessor.h"
+#include "LibThreading/BackgroundAction.h"
+#include "LibThreading/Mutex.h"
+#include "LibThreading/Thread.h"
 
 namespace PixelPaint {
+
+void ImageProcessingCommand::cancel()
+{
+    m_cancelled.store(true);
+    auto processor = ImageProcessor::the();
+    {
+        Threading::MutexLocker locker(processor->m_wakeup_mutex);
+        processor->m_wakeup_variable.signal();
+    }
+}
+
+bool ImageProcessingCommand::is_cancelled() const
+{
+    return m_cancelled.load();
+}
 
 FilterApplicationCommand::FilterApplicationCommand(NonnullRefPtr<Filter> filter, NonnullRefPtr<Layer> target_layer)
     : m_filter(move(filter))
@@ -16,6 +34,7 @@ FilterApplicationCommand::FilterApplicationCommand(NonnullRefPtr<Filter> filter,
 
 void FilterApplicationCommand::execute()
 {
+    m_filter->cancellation_requested = &m_cancelled;
     m_filter->apply(m_target_layer->content_bitmap(), m_target_layer->content_bitmap());
     m_filter->m_editor->gui_event_loop().deferred_invoke([strong_this = NonnullRefPtr(*this)]() {
         // HACK: we can't tell strong_this to not be const
@@ -29,17 +48,10 @@ static Singleton<ImageProcessor> s_image_processor;
 ImageProcessor::ImageProcessor()
     : m_command_queue(MUST(Queue::try_create()))
     , m_processor_thread(Threading::Thread::construct([this]() {
-        while (true) {
-            if (auto next_command = m_command_queue.try_dequeue(); !next_command.is_error()) {
-                next_command.value()->execute();
-            } else {
-                Threading::MutexLocker locker { m_wakeup_mutex };
-                m_wakeup_variable.wait_while([this]() { return m_command_queue.weak_used() == 0; });
-            }
-        }
+        processor_main();
         return 0;
     },
-          "Image Processor"sv))
+          "Image Processor Scheduler"sv))
     , m_wakeup_variable(m_wakeup_mutex)
 {
 }
@@ -47,6 +59,49 @@ ImageProcessor::ImageProcessor()
 ImageProcessor* ImageProcessor::the()
 {
     return s_image_processor;
+}
+
+void ImageProcessor::processor_main()
+{
+    int worker_number = 0;
+    while (true) {
+        if (auto next_command = m_command_queue.try_dequeue(); !next_command.is_error()) {
+            auto command = next_command.value();
+            if (command->is_cancelled())
+                continue;
+
+            bool volatile worker_done = false;
+            auto worker = Threading::Thread::construct([&]() {
+                command->execute();
+
+                worker_done = true;
+                {
+                    Threading::MutexLocker locker(m_wakeup_mutex);
+                    m_wakeup_variable.signal();
+                }
+                return 0;
+            },
+                String::formatted("Image Processor Worker {}", worker_number++));
+            worker->start();
+
+            {
+                Threading::MutexLocker locker { m_wakeup_mutex };
+                m_wakeup_variable.wait_while([&]() { return !worker_done && !command->is_cancelled(); });
+            }
+            if (command->is_cancelled()) {
+                auto result = worker->cancel();
+                // Since we know the tid is valid, ESRCH can only happen if the thread already exited.
+                VERIFY(!result.is_error() || result.error() == ESRCH);
+            } else {
+                auto result = worker->join();
+                // Same as above, here it is actually very likely.
+                VERIFY(!result.is_error() || result.error() == ESRCH);
+            }
+        } else {
+            Threading::MutexLocker locker { m_wakeup_mutex };
+            m_wakeup_variable.wait_while([this]() { return m_command_queue.weak_used() == 0; });
+        }
+    }
 }
 
 ErrorOr<void> ImageProcessor::enqueue_command(NonnullRefPtr<ImageProcessingCommand> command)

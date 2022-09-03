@@ -26,6 +26,7 @@ public:
 
     void start();
     void detach();
+    ErrorOr<void, ThreadError> cancel();
 
     template<typename T = void>
     Result<T, ThreadError> join();

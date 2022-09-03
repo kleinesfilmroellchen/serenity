@@ -30,6 +30,8 @@ void Median::apply(Gfx::Bitmap& target_bitmap, Gfx::Bitmap const& source_bitmap)
                     values.unchecked_append(source_bitmap.get_pixel(i, j));
                 }
             }
+            if (cancellation_requested && cancellation_requested->load())
+                return;
             // FIXME: If there was an insertion sort in AK, we should better use that here.
             // Sort the values to be able to extract the median. The median is determined by grey value (luminosity).
             quick_sort(values, [](auto& a, auto& b) { return a.luminosity() < b.luminosity(); });
@@ -47,8 +49,13 @@ RefPtr<GUI::Widget> Median::get_settings_widget()
     if (!m_settings_widget) {
         m_settings_widget = GUI::Widget::construct();
         m_settings_widget->load_from_gml(median_settings_gml);
-        m_settings_widget->find_descendant_of_type_named<GUI::SpinBox>("filter_radius")->on_change = [this](auto value) {
+        auto& m_radius_spinbox = *m_settings_widget->find_descendant_of_type_named<GUI::SpinBox>("filter_radius");
+        m_radius_spinbox.on_change = [this](auto value) {
             m_filter_radius = value;
+            update_preview();
+        };
+        m_radius_spinbox.on_return_pressed = [this, &m_radius_spinbox]() {
+            m_filter_radius = m_radius_spinbox.value();
             update_preview();
         };
     }

@@ -26,9 +26,13 @@ void Bloom::apply(Gfx::Bitmap& target_bitmap, Gfx::Bitmap const& source_bitmap) 
 
     Gfx::LumaFilter luma_filter(intermediate_bitmap);
     luma_filter.apply(m_luma_lower, 255);
+    if (cancellation_requested && cancellation_requested->load())
+        return;
 
     Gfx::FastBoxBlurFilter blur_filter(intermediate_bitmap);
     blur_filter.apply_three_passes(m_blur_radius);
+    if (cancellation_requested && cancellation_requested->load())
+        return;
 
     Gfx::BitmapMixer mixer(target_bitmap);
     mixer.mix_with(intermediate_bitmap, Gfx::BitmapMixer::MixingMethod::Lightest);
