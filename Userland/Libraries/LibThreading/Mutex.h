@@ -10,6 +10,7 @@
 #include <AK/Assertions.h>
 #include <AK/Format.h>
 #include <AK/Noncopyable.h>
+#include <AK/RefCounted.h>
 #include <AK/Types.h>
 #include <pthread.h>
 
@@ -85,5 +86,8 @@ ALWAYS_INLINE void Mutex::unlock()
     m_lock_count--;
     pthread_mutex_unlock(&m_mutex);
 }
+
+class SharedMutex : public Mutex
+    , public RefCounted<SharedMutex> { };
 
 }

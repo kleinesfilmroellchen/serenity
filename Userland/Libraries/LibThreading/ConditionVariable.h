@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Function.h>
+#include <AK/RefCounted.h>
 #include <LibThreading/Mutex.h>
 #include <pthread.h>
 #include <sys/cdefs.h>
@@ -60,5 +61,8 @@ private:
     pthread_cond_t m_condition;
     Mutex& m_to_wait_on;
 };
+
+class SharedConditionVariable : public ConditionVariable
+    , public RefCounted<SharedConditionVariable> { };
 
 }

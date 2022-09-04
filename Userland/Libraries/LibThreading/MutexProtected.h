@@ -13,6 +13,9 @@
 namespace Threading {
 
 template<typename T>
+class ThreadPool;
+
+template<typename T>
 class MutexProtected {
     AK_MAKE_NONCOPYABLE(MutexProtected);
     AK_MAKE_NONMOVABLE(MutexProtected);
