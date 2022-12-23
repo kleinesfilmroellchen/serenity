@@ -54,13 +54,13 @@ ErrorOr<NonnullRefPtr<SettingsWindow>> SettingsWindow::create(ByteString title, 
     window->m_ok_button = button_container.add<GUI::DialogButton>("OK"_string);
     window->m_ok_button->on_click = [window = window->make_weak_ptr<SettingsWindow>()](auto) {
         window->apply_settings();
-        GUI::Application::the()->quit();
+        window->close();
     };
 
     window->m_cancel_button = button_container.add<GUI::DialogButton>("Cancel"_string);
     window->m_cancel_button->on_click = [window = window->make_weak_ptr<SettingsWindow>()](auto) {
         window->cancel_settings();
-        GUI::Application::the()->quit();
+        window->close();
     };
 
     window->m_apply_button = button_container.add<GUI::DialogButton>("Apply"_string);
