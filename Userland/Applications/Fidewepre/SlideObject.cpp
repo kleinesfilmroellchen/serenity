@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2022, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2022-2023, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2022, kubczakn <kubczakn@umich.edu>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,6 +12,7 @@
 #include <LibCore/Stream.h>
 #include <LibGUI/Margins.h>
 #include <LibGfx/Font/FontDatabase.h>
+#include <LibGfx/Font/FontStyleMapping.h>
 #include <LibGfx/Forward.h>
 #include <LibGfx/Orientation.h>
 #include <LibGfx/Painter.h>
@@ -128,6 +130,7 @@ Text::Text()
     REGISTER_TEXT_ALIGNMENT_PROPERTY("text-alignment", text_alignment, set_text_alignment);
     REGISTER_INT_PROPERTY("font-size", font_size, set_font_size);
     REGISTER_STRING_PROPERTY("font", font, set_font);
+    REGISTER_STRING_PROPERTY("font-style", font_style, set_font_style);
 }
 
 void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
@@ -135,7 +138,7 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     auto scaled_bounding_box = this->transformed_bounding_box(painter.clip_rect(), display_scale);
 
     auto scaled_font_size = display_scale.height() * static_cast<float>(m_font_size);
-    auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, 0, Gfx::Font::AllowInexactSizeMatch::Yes);
+    auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
     if (font.is_null())
         font = Gfx::FontDatabase::default_font();
 
