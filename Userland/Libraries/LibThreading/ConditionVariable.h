@@ -13,6 +13,9 @@
 
 namespace Threading {
 
+template<typename T>
+class MutexProtected;
+
 // A signaling condition variable that wraps over the pthread_cond_* APIs.
 class ConditionVariable {
     friend class Mutex;
@@ -23,6 +26,12 @@ public:
     {
         auto result = pthread_cond_init(&m_condition, nullptr);
         VERIFY(result == 0);
+    }
+
+    template<typename T>
+    ConditionVariable(MutexProtected<T>& to_wait_on)
+        : ConditionVariable(to_wait_on.m_lock)
+    {
     }
 
     ALWAYS_INLINE ~ConditionVariable()
