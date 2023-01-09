@@ -1,140 +1,25 @@
-# SerenityOS
+## The Fidewepre patch branch of SerenityOS
 
-Graphical Unix-like operating system for x86-64 computers.
+This branch of [SerenityOS](https://www.github.com/SerenityOS/serenity) hosts the **Fidewepre** application. Fidewepre is short for **Filmröllchen's De-Webified Presenter** and represents a customized version of Presenter split off of the main branch before Presenter was modified into a LibWeb-backed application. It includes a lot of additional features from my original Presenter vision as well as a few features I merged from other people's unfinished PRs.
 
-[![GitHub Actions Status](https://github.com/SerenityOS/serenity/workflows/Build,%20lint,%20and%20test/badge.svg)](https://github.com/SerenityOS/serenity/actions?query=workflow%3A"Build%2C%20lint%2C%20and%20test")
-[![Azure DevOps Status](https://dev.azure.com/SerenityOS/SerenityOS/_apis/build/status/CI?branchName=master)](https://dev.azure.com/SerenityOS/SerenityOS/_build/latest?definitionId=1&branchName=master)
-[![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/serenity.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:serenity)
-[![Sonar Cube Static Analysis](https://sonarcloud.io/api/project_badges/measure?project=SerenityOS_serenity&metric=ncloc)](https://sonarcloud.io/dashboard?id=SerenityOS_serenity)
-[![Discord](https://img.shields.io/discord/830522505605283862.svg?logo=discord&logoColor=white&logoWidth=20&labelColor=7289DA&label=Discord&color=17cf48)](https://discord.gg/serenityos)
+### Why?
 
-[FAQ](Documentation/FAQ.md) | [Documentation](#how-do-i-read-the-documentation) | [Build Instructions](#how-do-i-build-and-run-this)
+To explain why Fidewepre exists, we have to start at the beginning.
 
-## About
+Presenter is an app I built for myself in late 2022 to hold presentations within Serenity, possibly about Serenity. After others expressed interest in this app (I wasn't sure if anyone except me cared about a "SerenityOS PowerPoint"), I decided to develop it cleanly as a new base system app, and it was added in PR #15718. I set up an issue tracker for features I (1) needed for usability and (2) wanted to have because they're cool. Within weeks, some other small patches were made while I prepared most of my needed features in a large PR. In fact, this very branch is the same that that PR was originally prepared on.
 
-SerenityOS is a love letter to '90s user interfaces with a custom Unix-like core. It flatters with sincerity by stealing beautiful ideas from various other systems.
+At the very beginning of 2023, the maintainers held a private discussion (no logs are available to this day) about the future of Presenter, and it was decided that Presenter should share more code with LibWeb because it was using its own bespoke rendering engine and could be using LibWeb instead. Once the discussion went public on [#ui](https://discord.com/channels/830522505605283862/830529037251641374/1060173916510900307),  I objected to this on several fronts, mainly on the performance and complexity basis. I will not repeat the entire argument because (1) you probably don't need to be convinced and (2) most of the maintainers will not be convinced. However, I agreed to a middle ground, where we would start a process of extracting significantly sophisticated pieces of the LibWeb rendering engine into LibGfx or a third library, including control via CSS features and possibly web-like layouting features. This was not accepted by the maintainer consensus and the decision was finalized: As soon as possible, LibWeb would be in place as the Presenter backend.
 
-Roughly speaking, the goal is a marriage between the aesthetic of late-1990s productivity software and the power-user accessibility of late-2000s \*nix. This is a system by us, for us, based on the things we like.
+I therefore, especially after seeing the first draft of the LibWeb version of Presenter, made the decision that I could not continue working on Presenter in this state. I am severely disappointed, I would have loved to cooperate and work on a solution that looked good for everyone and continue improving Presenter, but unfortunately my concerns were ignored. While I tried to approach LibWeb from a favorable angle, I see it with all the complexities it brings, and others and I had ideas of how to improve it and Presenter at the same time through modularization. Those suggestions were dismissed and the fundamental Presenter architecture dismissed, [sometimes quite impolitely](https://discord.com/channels/830522505605283862/830529037251641374/1060175015217221652). For sake of my mental health, I feel justified in not cooperating with Presenter development for the time being.
 
-You can watch videos of the system being developed on YouTube:
+Because I need Presenter, however, I created this branch with a split-off Fidewepre. The branch is only an addition of Fidewepre to the base system, all code modifying other parts of the system should and will be mainlined.
 
-* [Andreas Kling's channel](https://youtube.com/andreaskling)
-* [Linus Groh's channel](https://youtube.com/linusgroh)
-* [kleines Filmröllchen's channel](https://www.youtube.com/c/kleinesfilmroellchen)
+Fidewepre will be continually worked on as long as I need it and as long as Presenter is in a "dumb" OutOfProcessWebView-state. If either of these changes, I will drop Fidewepre without a second thought.
 
-## Screenshot
+### Running
 
-![Screenshot as of c03b788.png](Meta/Screenshots/screenshot-c03b788.png)
+Build SerenityOS normally, and Fidewepre will be an additional application installed into the system.
 
-## Features
+If you run this branch, it is recommended you first disable the Presenter component from the main build, as both call themselves "Presenter" towards the user.
 
-* Modern x86 64-bit kernel with pre-emptive multi-threading
-* [Browser](Userland/Applications/Browser/) with JavaScript, WebAssembly, and more (check the spec compliance for [JS](https://serenityos.github.io/libjs-website/test262/), [CSS](https://css.tobyase.de/), and [Wasm](https://serenityos.github.io/libjs-website/wasm/))
-* Security features (hardware protections, limited userland capabilities, W^X memory, `pledge` & `unveil`, (K)ASLR, OOM-resistance, web-content isolation, state-of-the-art TLS algorithms, ...)
-* [System services](Userland/Services/) (WindowServer, LoginServer, AudioServer, WebServer, RequestServer, CrashServer, ...) and modern IPC
-* Good POSIX compatibility ([LibC](Userland/Libraries/LibC/), Shell, syscalls, signals, pseudoterminals, filesystem notifications, standard Unix [utilities](Userland/Utilities/), ...)
-* POSIX-like virtual file systems (/proc, /dev, /sys, /tmp, ...) and ext2 file system
-* Network stack and applications with support for IPv4, TCP, UDP; DNS, HTTP, Gemini, IMAP, NTP
-* Profiling, debugging and other development tools (Kernel-supported profiling, CrashReporter, interactive GUI playground, HexEditor, HackStudio IDE for C++ and more)
-* [Libraries](Userland/Libraries/) for everything from cryptography to OpenGL, audio, JavaScript, GUI, playing chess, ...
-* Support for many common and uncommon file formats (PNG, JPEG, GIF, MP3, WAV, FLAC, ZIP, TAR, PDF, QOI, Gemini, ...)
-* Unified style and design philosophy, flexible theming system, [custom (bitmap and vector) fonts](https://fonts.serenityos.net/font-family)
-* [Games](Userland/Games/) (Solitaire, Minesweeper, 2048, chess, Conway's Game of Life, ...) and [demos](Userland/Demos/) (CatDog, Starfield, Eyes, mandelbrot set, WidgetGallery, ...)
-* Every-day GUI programs and utilities (Spreadsheet with JavaScript, TextEditor, Terminal, PixelPaint, various multimedia viewers and players, Mail, Assistant, Calculator, ...)
-
-... and all of the above are right in this repository, no extra dependencies, built from-scratch by us :^)
-
-Additionally, there are [over three hundred ports of popular open-source software](Ports/AvailablePorts.md), including games, compilers, Unix tools, multimedia apps and more.
-
-## How do I read the documentation?
-
-Man pages are available online at [man.serenityos.org](https://man.serenityos.org). These pages are generated from the Markdown source files in [`Base/usr/share/man`](https://github.com/SerenityOS/serenity/tree/master/Base/usr/share/man) and updated automatically.
-
-When running SerenityOS you can use `man` for the terminal interface, or `help` for the GUI.
-
-Code-related documentation can be found in the [documentation](Documentation/) folder.
-
-## How do I build and run this?
-
-See the [SerenityOS build instructions](https://github.com/SerenityOS/serenity/blob/master/Documentation/BuildInstructions.md). Serenity runs on Linux, macOS (aarch64 might be a challenge), Windows (with WSL2) and many other *Nixes with hardware or software virtualization.
-
-## Get in touch and participate!
-
-Join our Discord server: [SerenityOS Discord](https://discord.gg/serenityos)
-
-Before opening an issue, please see the [issue policy](https://github.com/SerenityOS/serenity/blob/master/CONTRIBUTING.md#issue-policy).
-
-A general guide for contributing can be found in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-## Authors
-
-* **Andreas Kling** - [awesomekling](https://twitter.com/awesomekling) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/awesomekling)
-* **Robin Burchell** - [rburchell](https://github.com/rburchell)
-* **Conrad Pankoff** - [deoxxa](https://github.com/deoxxa)
-* **Sergey Bugaev** - [bugaevc](https://github.com/bugaevc)
-* **Liav A** - [supercomputer7](https://github.com/supercomputer7)
-* **Linus Groh** - [linusg](https://github.com/linusg) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/linusg)
-* **Ali Mohammad Pur** - [alimpfard](https://github.com/alimpfard)
-* **Shannon Booth** - [shannonbooth](https://github.com/shannonbooth)
-* **Hüseyin ASLITÜRK** - [asliturk](https://github.com/asliturk)
-* **Matthew Olsson** - [mattco98](https://github.com/mattco98)
-* **Nico Weber** - [nico](https://github.com/nico)
-* **Brian Gianforcaro** - [bgianfo](https://github.com/bgianfo)
-* **Ben Wiederhake** - [BenWiederhake](https://github.com/BenWiederhake)
-* **Tom** - [tomuta](https://github.com/tomuta)
-* **Paul Scharnofske** - [asynts](https://github.com/asynts)
-* **Itamar Shenhar** - [itamar8910](https://github.com/itamar8910)
-* **Luke Wilde** - [Lubrsi](https://github.com/Lubrsi)
-* **Brendan Coles** - [bcoles](https://github.com/bcoles)
-* **Andrew Kaster** - [ADKaster](https://github.com/ADKaster) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/ADKaster)
-* **thankyouverycool** - [thankyouverycool](https://github.com/thankyouverycool)
-* **Idan Horowitz** - [IdanHo](https://github.com/IdanHo)
-* **Gunnar Beutner** - [gunnarbeutner](https://github.com/gunnarbeutner)
-* **Tim Flynn** - [trflynn89](https://github.com/trflynn89)
-* **Jean-Baptiste Boric** - [boricj](https://github.com/boricj)
-* **Stephan Unverwerth** - [sunverwerth](https://github.com/sunverwerth)
-* **Max Wipfli** - [MaxWipfli](https://github.com/MaxWipfli)
-* **Daniel Bertalan** - [BertalanD](https://github.com/BertalanD)
-* **Jelle Raaijmakers** - [GMTA](https://github.com/GMTA)
-* **Sam Atkins** - [AtkinsSJ](https://github.com/AtkinsSJ) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/AtkinsSJ)
-* **Tobias Christiansen** - [TobyAsE](https://github.com/TobyAsE)
-* **Lenny Maiorani** - [ldm5180](https://github.com/ldm5180)
-* **sin-ack** - [sin-ack](https://github.com/sin-ack)
-* **Jesse Buhagiar** - [Quaker762](https://github.com/Quaker762)
-* **Peter Elliott** - [Petelliott](https://github.com/Petelliott)
-* **Karol Kosek** - [krkk](https://github.com/krkk)
-* **Mustafa Quraish** - [mustafaquraish](https://github.com/mustafaquraish)
-* **David Tuin** - [davidot](https://github.com/davidot)
-* **Leon Albrecht** - [Hendiadyoin1](https://github.com/Hendiadyoin1)
-* **Tim Schumacher** - [timschumi](https://github.com/timschumi)
-* **Marcus Nilsson** - [metmo](https://github.com/metmo)
-* **Gegga Thor** - [Xexxa](https://github.com/Xexxa) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/Xexxa)
-* **kleines Filmröllchen** - [kleinesfilmroellchen](https://github.com/kleinesfilmroellchen) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/kleinesfilmroellchen)
-* **Kenneth Myhra** - [kennethmyhra](https://github.com/kennethmyhra)
-* **Maciej** - [sppmacd](https://github.com/sppmacd)
-* **Sahan Fernando** - [ccapitalK](https://github.com/ccapitalK)
-* **Benjamin Maxwell** - [MacDue](https://github.com/MacDue)
-* **Dennis Esternon** - [djwisdom](https://github.com/djwisdom) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/djwisdom)
-* **frhun** - [frhun](https://github.com/frhun)
-* **networkException** - [networkException](https://github.com/networkException) [![GitHub Sponsors](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub)](https://github.com/sponsors/networkException)
-* **Brandon Jordan** - [electrikmilk](https://github.com/electrikmilk)
-* **Lucas Chollet** - [LucasChollet](https://github.com/LucasChollet)
-* **Timon Kruiper** - [FireFox317](https://github.com/FireFox317)
-* **Martin Falisse** - [martinfalisse](https://github.com/martinfalisse)
-* **Gregory Bertilson** - [Zaggy1024](https://github.com/Zaggy1024)
-* **Erik Wouters** - [EWouters](https://github.com/EWouters)
-* **Rodrigo Tobar** - [rtobar](https://github.com/rtobar)
-* **Alexander Kalenik** - [kalenikaliaksandr](https://github.com/kalenikaliaksandr) 
-* **Tim Ledbetter** - [tcl3](https://github.com/tcl3)
-* **Steffen T. Larssen** - [stelar7](https://github.com/stelar7)
-* **Andi Gallo** - [axgallo](https://github.com/axgallo)
-* **Simon Wanner** - [skyrising](https://github.com/skyrising)
-* **FalseHonesty** - [FalseHonesty](https://github.com/FalseHonesty)
-* **Bastiaan van der Plaat** - [bplaat](https://github.com/bplaat)
-* **Dan Klishch** - [DanShaders](https://github.com/DanShaders)
-
-And many more! [See here](https://github.com/SerenityOS/serenity/graphs/contributors) for a full contributor list. The people listed above have landed more than 100 commits in the project. :^)
-
-## License
-
-SerenityOS is licensed under a 2-clause BSD license.
+If required, you can try to rebase this branch on SerenityOS master. I will do this myself whenever I use Fidewepre for something important, but I do not guarantee that Fidewepre runs on latest master.
