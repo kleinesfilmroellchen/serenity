@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "LibThreading/ConditionVariable.h"
 #include "Slide.h"
 #include <AK/DeprecatedString.h>
 #include <AK/Forward.h>
@@ -17,6 +18,8 @@
 #include <LibGfx/Size.h>
 
 static constexpr int const PRESENTATION_FORMAT_VERSION = 1;
+
+static constexpr size_t const DEFAULT_CACHE_SIZE = 10;
 
 // In-memory representation of the presentation stored in a file.
 // This class also contains all the parser code for loading .presenter files.
@@ -47,7 +50,7 @@ public:
     void go_to_slide(unsigned slide_index);
 
     // This assumes that the caller has clipped the painter to exactly the display area.
-    void paint(Gfx::Painter& painter) const;
+    void paint(Gfx::Painter& painter);
 
     // Formats a footer with user-supplied formatting parameters.
     // {presentation_title}, {slide_title}, {author}, {slides_total}, {frames_total}, {date}
@@ -59,6 +62,11 @@ public:
 
     Optional<DeprecatedString> footer_text() const;
 
+    // Note that if the cache is larger than the given value, old slides will be evicted from the cache only once new slides are pushed to the cache.
+    void set_cache_size(size_t cache_size);
+
+    void predraw_slide();
+
 private:
     static HashMap<DeprecatedString, DeprecatedString> parse_metadata(JsonObject const& metadata_object);
     static ErrorOr<Gfx::IntSize> parse_presentation_size(JsonObject const& metadata_object);
@@ -68,6 +76,11 @@ private:
 
     void append_slide(Slide slide);
 
+    void cache(unsigned slide_index, unsigned frame_index, NonnullRefPtr<Gfx::Bitmap> slide_render);
+    // Also marks the found entry as "hit" if possible.
+    RefPtr<Gfx::Bitmap> find_in_cache(unsigned slide_index, unsigned frame_index);
+    void clear_cache();
+
     Vector<Slide> m_slides {};
     // This is not a pixel size, but an abstract size used by the slide objects for relative positioning.
     Gfx::IntSize m_normative_size;
@@ -76,4 +89,22 @@ private:
 
     Checked<unsigned> m_current_slide { 0 };
     Checked<unsigned> m_current_frame_in_slide { 0 };
+
+    Gfx::FloatSize m_last_scale {};
+    // This variable mighht seem to have TOCTOU bugs, but it actually doesn't matter if we accidentally overfill or underfill the cache once.
+    Atomic<size_t> m_slide_cache_size { DEFAULT_CACHE_SIZE };
+    // This variable however must be handled very carefully in the multi-threaded environment!
+    Atomic<unsigned> m_cache_time { 0 };
+
+    struct SlideCacheEntry {
+        unsigned slide_index;
+        unsigned frame_index;
+        NonnullRefPtr<Gfx::Bitmap> slide_render;
+        // Set to the current cache_time whenever the value is used.
+        // The entry with the lowest freshness is evicted from the cache first.
+        unsigned freshness;
+    };
+    // An LRU (least recently used) cache of rendered slides.
+    // We use a vector as it is most memory efficient, there is not one preferred key (so a HashMap makes little sense) and looping over the Vector is decently fast at the used sizes anyways.
+    Threading::MutexProtected<Vector<SlideCacheEntry, DEFAULT_CACHE_SIZE>> m_slide_cache;
 };

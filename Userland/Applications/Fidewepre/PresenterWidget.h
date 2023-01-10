@@ -67,4 +67,8 @@ private:
     Atomic<bool> m_export_done { false };
     RefPtr<GUI::Window> m_progress_window {};
     RefPtr<GUI::Progressbar> m_progress_bar;
+
+    Threading::Mutex m_slide_state;
+    Threading::ConditionVariable m_slide_state_updated { m_slide_state };
+    RefPtr<Threading::Thread> m_slide_predrawer {};
 };

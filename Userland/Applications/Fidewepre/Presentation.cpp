@@ -11,6 +11,7 @@
 #include <LibConfig/Client.h>
 #include <LibCore/Stream.h>
 #include <LibGUI/Window.h>
+#include <LibGfx/Bitmap.h>
 #include <LibGfx/Forward.h>
 #include <errno_codes.h>
 
@@ -117,6 +118,106 @@ void Presentation::go_to_slide(unsigned slide_index)
     m_current_frame_in_slide = 0;
 }
 
+void Presentation::set_cache_size(size_t cache_size)
+{
+    m_slide_cache_size = cache_size;
+}
+
+void Presentation::cache(unsigned slide_index, unsigned frame_index, NonnullRefPtr<Gfx::Bitmap> slide_render)
+{
+    if (m_slide_cache_size == 0)
+        return;
+
+    auto freshness = m_cache_time.fetch_add(1);
+
+    m_slide_cache.with_locked([&, this](auto& slide_cache) {
+        SlideCacheEntry new_entry {
+            .slide_index = slide_index,
+            .frame_index = frame_index,
+            .slide_render = move(slide_render),
+            .freshness = freshness,
+        };
+
+        // Empty the cache by evicting old entries. This also handles an overfull cache correctly.
+        while (slide_cache.size() + 1 > m_slide_cache_size) {
+            size_t oldest_cache_index = 0;
+            auto& oldest_cache_entry = slide_cache[oldest_cache_index];
+            for (size_t i = 0; i < slide_cache.size(); ++i) {
+                auto const& cache_entry = slide_cache[i];
+                if (cache_entry.freshness < oldest_cache_entry.freshness) {
+                    oldest_cache_entry = cache_entry;
+                    oldest_cache_index = i;
+                }
+            }
+            dbgln("Evicting {}, {} from the cache", oldest_cache_entry.slide_index, oldest_cache_entry.frame_index);
+            // We have reached the last entry we need to remove, so we can simply reassign the oldest entry.
+            if (slide_cache.size() == m_slide_cache_size) {
+                dbgln("Replacing the last entry");
+                slide_cache[oldest_cache_index] = move(new_entry);
+                return;
+            }
+            slide_cache.remove(oldest_cache_index);
+        }
+
+        dbgln("Appending {}, {} to the cache", slide_index, frame_index);
+        slide_cache.append(move(new_entry));
+    });
+}
+
+RefPtr<Gfx::Bitmap> Presentation::find_in_cache(unsigned slide_index, unsigned frame_index)
+{
+    auto freshness = m_cache_time.fetch_add(1);
+
+    return m_slide_cache.with_locked([&](auto& slide_cache) -> RefPtr<Gfx::Bitmap> {
+        for (auto& entry : slide_cache) {
+            // This order should improve speed, as the slide index is different more often than the frame index.
+            if (entry.slide_index == slide_index && entry.frame_index == frame_index) {
+                entry.freshness = freshness;
+                return entry.slide_render;
+            }
+        }
+        return {};
+    });
+}
+
+void Presentation::clear_cache()
+{
+    m_cache_time = 0;
+    m_slide_cache.with_locked([](auto& slide_cache) { slide_cache.clear(); });
+}
+
+void Presentation::predraw_slide()
+{
+    // In order to prevent data races, we extract the current frame and slide once and then use that to predraw a slide.
+    // If we are successful at predrawing
+    auto current_frame = m_current_frame_in_slide;
+    auto current_slide = m_current_slide;
+    current_frame++;
+    if (current_frame >= m_slides[current_slide.value()].frame_count()) {
+        if (current_slide.value() + 1 >= m_slides.size()) {
+            current_slide--;
+        } else {
+            current_frame = 0;
+            current_slide = min(current_slide.value() + 1u, m_slides.size() - 1);
+        }
+    }
+
+    // Make sure that both accesses to the cache happen atomically, otherwise we might put a slide into the cache twice!
+    m_slide_cache.with_locked([&](auto) {
+        auto possible_cached_slide = find_in_cache(current_slide.value(), current_frame.value());
+        if (possible_cached_slide.is_null()) {
+            auto display_size = m_normative_size.to_type<float>().scaled_by(m_last_scale.width(), m_last_scale.height()).to_type<int>();
+            auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_size);
+            if (maybe_slide_bitmap.is_error())
+                return;
+            auto slide_bitmap = maybe_slide_bitmap.release_value();
+            Gfx::Painter slide_bitmap_painter { slide_bitmap };
+            m_slides[current_slide.value()].paint(slide_bitmap_painter, current_frame.value(), m_last_scale);
+            cache(current_slide.value(), current_frame.value(), slide_bitmap);
+        }
+    });
+}
+
 ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView file_name, NonnullRefPtr<GUI::Window> window)
 {
     if (file_name.is_empty())
@@ -214,7 +315,7 @@ ErrorOr<Gfx::IntSize> Presentation::parse_presentation_size(JsonObject const& me
     };
 }
 
-void Presentation::paint(Gfx::Painter& painter) const
+void Presentation::paint(Gfx::Painter& painter)
 {
     auto display_area = painter.clip_rect();
     // These two should be the same, but better be safe than sorry.
@@ -224,7 +325,35 @@ void Presentation::paint(Gfx::Painter& painter) const
 
     // FIXME: Fill the background with a color depending on the color scheme
     painter.clear_rect(painter.clip_rect(), Color::White);
-    current_slide().paint(painter, m_current_frame_in_slide.value(), scale);
+
+    auto start_time = Time::now_realtime();
+
+    if (m_last_scale != scale)
+        clear_cache();
+    m_last_scale = scale;
+
+    m_slide_cache.with_locked([&, this](auto) {
+        auto possible_cached_slide = find_in_cache(m_current_slide.value(), m_current_frame_in_slide.value());
+        if (possible_cached_slide.is_null()) {
+            dbgln("Cache miss: {}, {}", m_current_slide.value(), m_current_frame_in_slide.value());
+            auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_area.size());
+            if (maybe_slide_bitmap.is_error()) {
+                // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.
+                current_slide().paint(painter, m_current_frame_in_slide.value(), scale);
+            } else {
+                auto slide_bitmap = maybe_slide_bitmap.release_value();
+                Gfx::Painter slide_bitmap_painter { slide_bitmap };
+                current_slide().paint(slide_bitmap_painter, m_current_frame_in_slide.value(), scale);
+                cache(m_current_slide.value(), m_current_frame_in_slide.value(), slide_bitmap);
+                painter.blit(painter.clip_rect().top_left(), slide_bitmap, slide_bitmap->rect());
+            }
+        } else {
+            dbgln("Cache hit: {}, {}", m_current_slide.value(), m_current_frame_in_slide.value());
+            painter.blit(painter.clip_rect().top_left(), *possible_cached_slide, possible_cached_slide->rect());
+        }
+    });
+
+    dbgln("Took {} ms to draw slide", (Time::now_realtime() - start_time).to_milliseconds());
 
     auto footer_text = this->footer_text();
     if (footer_text.has_value())

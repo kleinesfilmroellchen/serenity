@@ -5,6 +5,7 @@
  */
 
 #include "PresenterWidget.h"
+#include "LibThreading/BackgroundAction.h"
 #include "Presentation.h"
 #include "PresenterSettings.h"
 #include <AK/Format.h>
@@ -60,14 +61,22 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
     auto& presentation_menu = window->add_menu("&Presentation");
     auto next_slide_action = GUI::Action::create("&Next", { KeyCode::Key_Right }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/go-forward.png"sv)), [this](auto&) {
         if (m_current_presentation) {
-            m_current_presentation->next_frame();
+            {
+                Threading::MutexLocker lock(m_slide_state);
+                m_current_presentation->next_frame();
+                m_slide_state_updated.signal();
+            }
             outln("Switched forward to slide {} frame {}", m_current_presentation->current_slide_number(), m_current_presentation->current_frame_in_slide_number());
             update();
         }
     });
     auto previous_slide_action = GUI::Action::create("&Previous", { KeyCode::Key_Left }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/go-back.png"sv)), [this](auto&) {
         if (m_current_presentation) {
-            m_current_presentation->previous_frame();
+            {
+                Threading::MutexLocker lock(m_slide_state);
+                m_current_presentation->previous_frame();
+                m_slide_state_updated.signal();
+            }
             outln("Switched backward to slide {} frame {}", m_current_presentation->current_slide_number(), m_current_presentation->current_frame_in_slide_number());
             update();
         }
@@ -81,10 +90,32 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
         this->window()->set_fullscreen(true);
     })));
     TRY(presentation_menu.try_add_action(GUI::Action::create("Present From First &Slide", { KeyCode::Key_F5 }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/play.png"sv)), [this](auto&) {
-        if (m_current_presentation)
+        if (m_current_presentation) {
+            Threading::MutexLocker lock(m_slide_state);
             m_current_presentation->go_to_first_slide();
+            m_slide_state_updated.signal();
+        }
         this->window()->set_fullscreen(true);
     })));
+
+    m_slide_predrawer = TRY(Threading::Thread::try_create([&]() {
+        while (true) {
+            {
+                Threading::MutexLocker lock(m_slide_state);
+                // Spurious wakeups are okay, our condition is too expensive to check and caching too often is not harmful.
+                m_slide_state_updated.wait();
+            }
+            // Go to sleep until the main thread has done its work on the current slide.
+            // Otherwise, we will preempt it and not actually gain anything.
+            usleep(500'000);
+            if (m_current_presentation)
+                m_current_presentation->predraw_slide();
+        }
+        return static_cast<intptr_t>(0);
+    },
+        "Slide cacher"sv));
+    m_slide_predrawer->start();
+    m_slide_predrawer->detach();
 
     return {};
 }
@@ -96,6 +127,10 @@ void PresenterWidget::set_file(StringView file_name)
         GUI::MessageBox::show_error(window(), DeprecatedString::formatted("The presentation \"{}\" could not be loaded.\n{}", file_name, presentation.error()));
     } else {
         m_current_presentation = presentation.release_value();
+        {
+            Threading::MutexLocker lock(m_slide_state);
+            m_slide_state_updated.signal();
+        }
         window()->set_title(DeprecatedString::formatted(title_template, m_current_presentation->title(), m_current_presentation->author()));
         set_min_size(m_current_presentation->normative_size());
         // This will apply the new minimum size.
@@ -205,7 +240,9 @@ void PresenterWidget::go_to_slide_from_key_sequence()
     if (slide_index >= m_current_presentation->total_slide_count())
         return;
 
+    Threading::MutexLocker lock(m_slide_state);
     m_current_presentation->go_to_slide(slide_index);
+    m_slide_state_updated.signal();
 }
 
 void PresenterWidget::paint_event([[maybe_unused]] GUI::PaintEvent& event)
