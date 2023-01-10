@@ -19,7 +19,7 @@
 
 static constexpr int const PRESENTATION_FORMAT_VERSION = 1;
 
-static constexpr size_t const DEFAULT_CACHE_SIZE = 10;
+static constexpr size_t const DEFAULT_CACHE_SIZE = 20;
 
 // In-memory representation of the presentation stored in a file.
 // This class also contains all the parser code for loading .presenter files.
