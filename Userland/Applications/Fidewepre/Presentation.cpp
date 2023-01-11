@@ -156,17 +156,14 @@ void Presentation::cache(unsigned slide_index, unsigned frame_index, NonnullRefP
                     oldest_cache_index = i;
                 }
             }
-            dbgln("Evicting {}, {} from the cache", oldest_cache_entry.slide_index, oldest_cache_entry.frame_index);
             // We have reached the last entry we need to remove, so we can simply reassign the oldest entry.
             if (slide_cache.size() == m_slide_cache_size) {
-                dbgln("Replacing the last entry");
                 slide_cache[oldest_cache_index] = move(new_entry);
                 return;
             }
             slide_cache.remove(oldest_cache_index);
         }
 
-        dbgln("Appending {}, {} to the cache", slide_index, frame_index);
         slide_cache.append(move(new_entry));
     });
 }
@@ -352,7 +349,6 @@ void Presentation::paint(Gfx::Painter& painter)
     m_slide_cache.with_locked([&, this](auto) {
         auto possible_cached_slide = find_in_cache(m_current_slide.value(), m_current_frame_in_slide.value());
         if (possible_cached_slide.is_null()) {
-            dbgln("Cache miss: {}, {}", m_current_slide.value(), m_current_frame_in_slide.value());
             auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_area.size());
             if (maybe_slide_bitmap.is_error()) {
                 // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.
@@ -365,7 +361,6 @@ void Presentation::paint(Gfx::Painter& painter)
                 painter.blit(painter.clip_rect().top_left(), slide_bitmap, slide_bitmap->rect());
             }
         } else {
-            dbgln("Cache hit: {}, {}", m_current_slide.value(), m_current_frame_in_slide.value());
             painter.blit(painter.clip_rect().top_left(), *possible_cached_slide, possible_cached_slide->rect());
         }
     });
