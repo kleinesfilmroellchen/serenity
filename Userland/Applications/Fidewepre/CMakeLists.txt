@@ -6,6 +6,7 @@ serenity_component(
 )
 
 compile_gml(PresenterSettingsFooter.gml PresenterSettingsFooterGML.h presenter_settings_footer_gml)
+compile_gml(PresenterSettingsPerformance.gml PresenterSettingsPerformanceGML.h presenter_settings_performance_gml)
 
 set(SOURCES
     main.cpp
@@ -18,6 +19,7 @@ set(SOURCES
 
 set(GENERATED_SOURCES
     PresenterSettingsFooterGML.h
+    PresenterSettingsPerformanceGML.h
 )
 
 serenity_app(Fidewepre ICON app-display-settings)

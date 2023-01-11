@@ -6,16 +6,17 @@
 
 #pragma once
 
-#include "LibThreading/ConditionVariable.h"
 #include "Slide.h"
 #include <AK/DeprecatedString.h>
 #include <AK/Forward.h>
 #include <AK/HashMap.h>
 #include <AK/NonnullOwnPtr.h>
 #include <AK/Vector.h>
+#include <LibConfig/Listener.h>
 #include <LibCore/DateTime.h>
 #include <LibGfx/Painter.h>
 #include <LibGfx/Size.h>
+#include <LibThreading/ConditionVariable.h>
 
 static constexpr int const PRESENTATION_FORMAT_VERSION = 1;
 
@@ -23,7 +24,7 @@ static constexpr size_t const DEFAULT_CACHE_SIZE = 20;
 
 // In-memory representation of the presentation stored in a file.
 // This class also contains all the parser code for loading .presenter files.
-class Presentation {
+class Presentation : public Config::Listener {
 public:
     ~Presentation() = default;
 
@@ -64,8 +65,12 @@ public:
 
     // Note that if the cache is larger than the given value, old slides will be evicted from the cache only once new slides are pushed to the cache.
     void set_cache_size(size_t cache_size);
+    void set_prerender_count(size_t prerender_count);
 
-    void predraw_slide();
+    // Returns whether predrawing was successful.
+    bool predraw_slide();
+
+    virtual void config_u32_did_change(DeprecatedString const& domain, DeprecatedString const& group, DeprecatedString const& key, u32 value) override;
 
 private:
     static HashMap<DeprecatedString, DeprecatedString> parse_metadata(JsonObject const& metadata_object);
@@ -91,8 +96,9 @@ private:
     Checked<unsigned> m_current_frame_in_slide { 0 };
 
     Gfx::FloatSize m_last_scale {};
-    // This variable mighht seem to have TOCTOU bugs, but it actually doesn't matter if we accidentally overfill or underfill the cache once.
+    // This variable might seem to have TOCTOU bugs, but it actually doesn't matter if we accidentally overfill or underfill the cache once.
     Atomic<size_t> m_slide_cache_size { DEFAULT_CACHE_SIZE };
+    Atomic<size_t> m_prerender_count { 1 };
     // This variable however must be handled very carefully in the multi-threaded environment!
     Atomic<unsigned> m_cache_time { 0 };
 

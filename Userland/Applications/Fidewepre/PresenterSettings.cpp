@@ -6,7 +6,9 @@
 
 #include "PresenterSettings.h"
 #include <Applications/Fidewepre/PresenterSettingsFooterGML.h>
+#include <Applications/Fidewepre/PresenterSettingsPerformanceGML.h>
 #include <LibConfig/Client.h>
+#include <LibGUI/SpinBox.h>
 #include <LibGUI/TextBox.h>
 
 PresenterSettingsFooterWidget::PresenterSettingsFooterWidget()
@@ -49,4 +51,31 @@ void PresenterSettingsFooterWidget::cancel_settings()
     m_override_footer->set_checked(override_state);
     m_enable_footer->set_checked(enable_state);
     m_footer_text->set_text(footer_text_state);
+}
+
+PresenterSettingsPerformanceWidget::PresenterSettingsPerformanceWidget()
+{
+    MUST(load_from_gml(presenter_settings_performance_gml));
+    m_prerender_count = find_descendant_of_type_named<GUI::SpinBox>("prerender_count");
+    m_cache_size = find_descendant_of_type_named<GUI::SpinBox>("cache_size");
+
+    m_cache_size->on_change = [this](auto) { this->set_modified(true); };
+    m_prerender_count->on_change = [this](auto) { this->set_modified(true); };
+
+    cancel_settings();
+}
+
+void PresenterSettingsPerformanceWidget::apply_settings()
+{
+    Config::write_u32("Presenter"sv, "Performance"sv, "PrerenderCount"sv, m_prerender_count->value());
+    Config::write_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, m_cache_size->value());
+}
+
+void PresenterSettingsPerformanceWidget::cancel_settings()
+{
+    auto prerender_count = Config::read_u32("Presenter"sv, "Performance"sv, "PrerenderCount"sv, 1);
+    auto cache_size = Config::read_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, 10);
+
+    m_prerender_count->set_value(prerender_count);
+    m_cache_size->set_value(cache_size);
 }

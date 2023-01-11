@@ -20,6 +20,8 @@ Presentation::Presentation(Gfx::IntSize normative_size, HashMap<DeprecatedString
     , m_metadata(move(metadata))
     , m_templates(move(templates))
 {
+    m_prerender_count = Config::read_u32("Presenter"sv, "Performance"sv, "PrerenderCount"sv, 1);
+    m_slide_cache_size = Config::read_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, DEFAULT_CACHE_SIZE);
 }
 
 NonnullOwnPtr<Presentation> Presentation::construct(Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
@@ -123,6 +125,11 @@ void Presentation::set_cache_size(size_t cache_size)
     m_slide_cache_size = cache_size;
 }
 
+void Presentation::set_prerender_count(size_t prerender_count)
+{
+    m_prerender_count = prerender_count;
+}
+
 void Presentation::cache(unsigned slide_index, unsigned frame_index, NonnullRefPtr<Gfx::Bitmap> slide_render)
 {
     if (m_slide_cache_size == 0)
@@ -186,35 +193,45 @@ void Presentation::clear_cache()
     m_slide_cache.with_locked([](auto& slide_cache) { slide_cache.clear(); });
 }
 
-void Presentation::predraw_slide()
+bool Presentation::predraw_slide()
 {
     // In order to prevent data races, we extract the current frame and slide once and then use that to predraw a slide.
-    // If we are successful at predrawing
     auto current_frame = m_current_frame_in_slide;
     auto current_slide = m_current_slide;
-    current_frame++;
-    if (current_frame >= m_slides[current_slide.value()].frame_count()) {
-        if (current_slide.value() + 1 >= m_slides.size()) {
-            current_slide--;
-        } else {
-            current_frame = 0;
-            current_slide = min(current_slide.value() + 1u, m_slides.size() - 1);
+    size_t prerender_amount = 0;
+
+    // Go to the next frame as far as necessary.
+    // We either look for the first not-prerendered slide, or stop once we reached the prerender count.
+    // Note that we lock the slide cache several times here independently.
+    // If a slide is incorrectly found to be non-cached, we will find that it is already cached down below.
+    do {
+        current_frame++;
+        prerender_amount++;
+        if (current_frame >= m_slides[current_slide.value()].frame_count()) {
+            if (current_slide.value() + 1 >= m_slides.size()) {
+                current_slide--;
+            } else {
+                current_frame = 0;
+                current_slide = min(current_slide.value() + 1u, m_slides.size() - 1);
+            }
         }
-    }
+    } while (!find_in_cache(current_slide.value(), current_frame.value()).is_null() && prerender_amount < m_prerender_count);
 
     // Make sure that both accesses to the cache happen atomically, otherwise we might put a slide into the cache twice!
-    m_slide_cache.with_locked([&](auto) {
+    return m_slide_cache.with_locked([&](auto) -> bool {
         auto possible_cached_slide = find_in_cache(current_slide.value(), current_frame.value());
         if (possible_cached_slide.is_null()) {
             auto display_size = m_normative_size.to_type<float>().scaled_by(m_last_scale.width(), m_last_scale.height()).to_type<int>();
             auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_size);
             if (maybe_slide_bitmap.is_error())
-                return;
+                return false;
             auto slide_bitmap = maybe_slide_bitmap.release_value();
             Gfx::Painter slide_bitmap_painter { slide_bitmap };
             m_slides[current_slide.value()].paint(slide_bitmap_painter, current_frame.value(), m_last_scale);
             cache(current_slide.value(), current_frame.value(), slide_bitmap);
+            return true;
         }
+        return false;
     });
 }
 
@@ -389,4 +406,17 @@ DeprecatedString Presentation::format_footer(StringView format) const
 
     footer_generator.append(format);
     return footer_generator.as_string();
+}
+
+void Presentation::config_u32_did_change(DeprecatedString const& domain, DeprecatedString const& group, DeprecatedString const& key, u32 value)
+{
+    if (domain != "Presenter")
+        return;
+    if (group != "Performance")
+        return;
+
+    if (key == "PrerenderCount")
+        set_prerender_count(value);
+    else if (key == "CacheSize")
+        set_cache_size(value);
 }

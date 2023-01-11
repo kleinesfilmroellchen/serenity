@@ -68,7 +68,7 @@ private:
     RefPtr<GUI::Window> m_progress_window {};
     RefPtr<GUI::Progressbar> m_progress_bar;
 
-    Threading::Mutex m_slide_state;
-    Threading::ConditionVariable m_slide_state_updated { m_slide_state };
+    Threading::Mutex m_presentation_state;
+    Threading::ConditionVariable m_presentation_state_updated { m_presentation_state };
     RefPtr<Threading::Thread> m_slide_predrawer {};
 };
