@@ -11,6 +11,7 @@
 #include <AK/NonnullOwnPtr.h>
 #include <AK/NonnullRefPtr.h>
 #include <LibCore/Object.h>
+#include <LibGUI/Application.h>
 #include <LibGUI/MessageBox.h>
 #include <LibGUI/Window.h>
 #include <LibGfx/Bitmap.h>
@@ -21,6 +22,7 @@
 #include <LibGfx/Rect.h>
 #include <LibGfx/TextAlignment.h>
 #include <LibImageDecoderClient/Client.h>
+#include <LibThreading/BackgroundAction.h>
 
 enum class ObjectRole {
     Default,
@@ -51,12 +53,17 @@ public:
     ObjectRole role() const { return m_role; }
     void set_role(ObjectRole role) { m_role = role; }
 
+    // Returns whether the slide object was invalidated, then resets the invalidation state.
+    bool fetch_and_reset_invalidation();
+
 protected:
     SlideObject();
 
     Gfx::IntRect m_rect;
     HashTable<unsigned> m_frames {};
     ObjectRole m_role { ObjectRole::Default };
+
+    Atomic<bool> m_invalidated { false };
 };
 
 // Objects with a foreground color.
@@ -122,7 +129,7 @@ class Image : public SlideObject {
     C_OBJECT(Image);
 
 public:
-    Image(NonnullRefPtr<ImageDecoderClient::Client>, NonnullRefPtr<GUI::Window>);
+    Image(NonnullRefPtr<GUI::Window>);
     virtual ~Image() = default;
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const override;
@@ -130,9 +137,30 @@ public:
     void set_image_path(DeprecatedString image_path)
     {
         m_image_path = move(image_path);
-        auto result = reload_image();
-        if (result.is_error())
-            GUI::MessageBox::show_error(m_window, DeprecatedString::formatted("Loading image {} failed: {}", m_image_path, result.error()));
+
+        auto image_load_action = Threading::BackgroundAction<ErrorOr<void>>::try_create(
+            [this](auto&) {
+                // FIXME: shouldn't be necessary
+                Core::EventLoop loop;
+                return this->reload_image();
+            },
+            [this](auto result) -> ErrorOr<void> {
+                if (result.is_error())
+                    GUI::MessageBox::show_error(m_window, DeprecatedString::formatted("Loading image {} failed: {}", m_image_path, result.error()));
+                else
+                    // This should cause us to redraw.
+                    m_window->update();
+                return {};
+            });
+
+        if (image_load_action.is_error()) {
+            // Try to load the image synchronously instead.
+            auto result = this->reload_image();
+            if (result.is_error())
+                GUI::MessageBox::show_error(m_window, DeprecatedString::formatted("Loading image {} failed: {}", m_image_path, result.error()));
+        } else {
+            m_image_load_action = image_load_action.release_value();
+        }
     }
     StringView image_path() const { return m_image_path; }
     void set_scaling(ImageScaling scaling) { m_scaling = scaling; }
@@ -148,7 +176,7 @@ protected:
 private:
     ErrorOr<void> reload_image();
 
-    RefPtr<Gfx::Bitmap> m_currently_loaded_image;
-    NonnullRefPtr<ImageDecoderClient::Client> m_client;
+    Threading::MutexProtected<RefPtr<Gfx::Bitmap>> m_currently_loaded_image;
     NonnullRefPtr<GUI::Window> m_window;
+    RefPtr<Threading::BackgroundAction<ErrorOr<void>>> m_image_load_action;
 };

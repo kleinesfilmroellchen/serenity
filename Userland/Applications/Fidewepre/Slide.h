@@ -22,6 +22,8 @@ public:
 
     void paint(Gfx::Painter&, unsigned current_frame, Gfx::FloatSize display_scale) const;
 
+    bool fetch_and_reset_invalidation();
+
 private:
     Slide(NonnullRefPtrVector<SlideObject> slide_objects, DeprecatedString title, unsigned frame_count);
 

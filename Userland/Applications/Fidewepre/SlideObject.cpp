@@ -26,16 +26,12 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
     if (!maybe_type.is_string())
         return Error::from_string_view("Slide object must have a type"sv);
 
-    static Optional<NonnullRefPtr<ImageDecoderClient::Client>> image_decoder_client {};
-
     auto type = maybe_type.as_string();
     RefPtr<SlideObject> object;
     if (type == "text"sv)
         object = TRY(try_make_ref_counted<Text>());
     else if (type == "image"sv) {
-        if (!image_decoder_client.has_value())
-            image_decoder_client = TRY(ImageDecoderClient::Client::try_create());
-        object = TRY(try_make_ref_counted<Image>(image_decoder_client.value(), window));
+        object = TRY(try_make_ref_counted<Image>(window));
     } else
         return Error::from_string_view("Unsupported slide object type"sv);
 
@@ -113,6 +109,12 @@ Gfx::IntRect SlideObject::transformed_bounding_box(Gfx::IntRect clip_rect, Gfx::
     return m_rect.to_type<float>().scaled(display_scale.width(), display_scale.height()).to_rounded<int>().translated(clip_rect.top_left());
 }
 
+bool SlideObject::fetch_and_reset_invalidation()
+{
+    auto invalidated = m_invalidated.exchange(false);
+    return invalidated;
+}
+
 GraphicsObject::GraphicsObject()
 {
     register_property(
@@ -149,9 +151,8 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     painter.draw_text(scaled_bounding_box, m_text.view(), *font, m_text_alignment, m_color, Gfx::TextElision::None, Gfx::TextWrapping::Wrap);
 }
 
-Image::Image(NonnullRefPtr<ImageDecoderClient::Client> client, NonnullRefPtr<GUI::Window> window)
-    : m_client(move(client))
-    , m_window(move(window))
+Image::Image(NonnullRefPtr<GUI::Window> window)
+    : m_window(move(window))
 {
     REGISTER_STRING_PROPERTY("path", image_path, set_image_path);
     REGISTER_ENUM_PROPERTY("scaling", scaling, set_scaling, ImageScaling,
@@ -164,49 +165,55 @@ Image::Image(NonnullRefPtr<ImageDecoderClient::Client> client, NonnullRefPtr<GUI
         { Gfx::Painter::ScalingMode::BilinearBlend, "bilinear-blend" }, );
 }
 
-// FIXME: Should run on another thread and report errors.
 ErrorOr<void> Image::reload_image()
 {
     auto file = TRY(Core::Stream::File::open(m_image_path, Core::Stream::OpenMode::Read));
     auto data = TRY(file->read_until_eof());
-    auto maybe_decoded = m_client->decode_image(data);
+    auto maybe_decoded = TRY(ImageDecoderClient::Client::try_create())->decode_image(data);
     if (!maybe_decoded.has_value() || maybe_decoded.value().frames.size() < 1)
         return Error::from_string_view("Could not decode image"sv);
     // FIXME: Handle multi-frame images.
-    m_currently_loaded_image = maybe_decoded.value().frames.first().bitmap;
+    m_currently_loaded_image.with_locked([&](auto& image) { image = maybe_decoded.value().frames.first().bitmap; });
+    dbgln("Invalidating image {}", m_image_path);
+    m_invalidated.store(true);
     return {};
 }
 
 void Image::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
 {
-    if (!m_currently_loaded_image)
-        return;
+    // Const-cast is fine here, as we never modify the loaded image.
+    const_cast<Threading::MutexProtected<RefPtr<Gfx::Bitmap>>*>(&m_currently_loaded_image)->with_locked([&, this](auto const& image) {
+        if (!image) {
+            dbgln("Image {} is not loaded yet, skipping", m_image_path);
+            return;
+        }
 
-    auto transformed_bounding_box = this->transformed_bounding_box(painter.clip_rect(), display_scale);
+        auto transformed_bounding_box = this->transformed_bounding_box(painter.clip_rect(), display_scale);
 
-    auto image_size = m_currently_loaded_image->size();
-    auto image_aspect_ratio = image_size.aspect_ratio();
+        auto image_size = image->size();
+        auto image_aspect_ratio = image_size.aspect_ratio();
 
-    auto image_box = transformed_bounding_box;
-    if (m_scaling != ImageScaling::Stretch) {
-        auto width_corresponding_to_height = image_box.height() * image_aspect_ratio;
-        auto direction_to_preserve_for_fit = width_corresponding_to_height > image_box.width() ? Orientation::Horizontal : Orientation::Vertical;
-        // Fit largest and fit smallest are the same, except with inverted preservation conditions.
-        if (m_scaling == ImageScaling::FitLargest)
-            direction_to_preserve_for_fit = direction_to_preserve_for_fit == Orientation::Vertical ? Orientation::Horizontal : Orientation::Vertical;
+        auto image_box = transformed_bounding_box;
+        if (m_scaling != ImageScaling::Stretch) {
+            auto width_corresponding_to_height = image_box.height() * image_aspect_ratio;
+            auto direction_to_preserve_for_fit = width_corresponding_to_height > image_box.width() ? Orientation::Horizontal : Orientation::Vertical;
+            // Fit largest and fit smallest are the same, except with inverted preservation conditions.
+            if (m_scaling == ImageScaling::FitLargest)
+                direction_to_preserve_for_fit = direction_to_preserve_for_fit == Orientation::Vertical ? Orientation::Horizontal : Orientation::Vertical;
 
-        image_box.set_size(image_box.size().match_aspect_ratio(image_aspect_ratio, direction_to_preserve_for_fit));
-    }
+            image_box.set_size(image_box.size().match_aspect_ratio(image_aspect_ratio, direction_to_preserve_for_fit));
+        }
 
-    image_box = image_box.centered_within(transformed_bounding_box);
+        image_box = image_box.centered_within(transformed_bounding_box);
 
-    auto original_clip_rect = painter.clip_rect();
-    painter.clear_clip_rect();
-    painter.add_clip_rect(image_box);
+        auto original_clip_rect = painter.clip_rect();
+        painter.clear_clip_rect();
+        painter.add_clip_rect(image_box);
 
-    // FIXME: Allow to set the scaling mode.
-    painter.draw_scaled_bitmap(image_box, *m_currently_loaded_image, m_currently_loaded_image->rect(), 1.0f, m_scaling_mode);
+        // FIXME: Allow to set the scaling mode.
+        painter.draw_scaled_bitmap(image_box, *image, image->rect(), 1.0f, m_scaling_mode);
 
-    painter.clear_clip_rect();
-    painter.add_clip_rect(original_clip_rect);
+        painter.clear_clip_rect();
+        painter.add_clip_rect(original_clip_rect);
+    });
 }

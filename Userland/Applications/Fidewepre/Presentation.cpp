@@ -356,7 +356,10 @@ void Presentation::paint(Gfx::Painter& painter)
 
     m_slide_cache.with_locked([&, this](auto) {
         auto possible_cached_slide = find_in_cache(m_current_slide.value(), m_current_frame_in_slide.value());
-        if (possible_cached_slide.is_null()) {
+        auto slide_invalidated = m_slides[m_current_slide.value()].fetch_and_reset_invalidation();
+        if (slide_invalidated || possible_cached_slide.is_null()) {
+            if (slide_invalidated)
+                dbgln("Redrawing slide {} because it was invalidated", m_current_slide.value());
             auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_area.size());
             if (maybe_slide_bitmap.is_error()) {
                 // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.

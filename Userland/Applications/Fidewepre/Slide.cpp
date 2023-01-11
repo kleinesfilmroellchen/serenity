@@ -55,3 +55,12 @@ void Slide::paint(Gfx::Painter& painter, unsigned int current_frame, Gfx::FloatS
             object.paint(painter, display_scale);
     }
 }
+
+bool Slide::fetch_and_reset_invalidation()
+{
+    auto invalidated { false };
+    for (auto& object : m_slide_objects) {
+        invalidated |= object.fetch_and_reset_invalidation();
+    }
+    return invalidated;
+}
