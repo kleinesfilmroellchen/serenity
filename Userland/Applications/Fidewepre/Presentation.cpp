@@ -145,6 +145,10 @@ void Presentation::cache(unsigned slide_index, unsigned frame_index, NonnullRefP
             .freshness = freshness,
         };
 
+        // If we find an identical entry, replace the other entry!
+        // There are in fact some circumstances where we can't check the cache carefully, but this will prevent any of them to wreak havoc.
+        slide_cache.remove_all_matching([&](auto& value) { return value.slide_index == slide_index && value.frame_index == frame_index; });
+
         // Empty the cache by evicting old entries. This also handles an overfull cache correctly.
         while (slide_cache.size() + 1 > m_slide_cache_size) {
             size_t oldest_cache_index = 0;
