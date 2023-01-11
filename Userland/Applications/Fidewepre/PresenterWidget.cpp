@@ -119,7 +119,7 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
                     else
                         predrawing_successful = m_current_presentation->predraw_slide();
                 }
-                sched_yield();
+                usleep(250'000);
             }
         }
         return static_cast<intptr_t>(0);
