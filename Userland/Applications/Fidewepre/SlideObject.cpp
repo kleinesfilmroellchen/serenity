@@ -26,13 +26,17 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
     if (!maybe_type.is_string())
         return Error::from_string_view("Slide object must have a type"sv);
 
+    static Optional<NonnullRefPtr<ImageDecoderClient::Client>> image_decoder_client {};
+
     auto type = maybe_type.as_string();
     RefPtr<SlideObject> object;
     if (type == "text"sv)
         object = TRY(try_make_ref_counted<Text>());
-    else if (type == "image"sv)
-        object = TRY(try_make_ref_counted<Image>(TRY(ImageDecoderClient::Client::try_create()), window));
-    else
+    else if (type == "image"sv) {
+        if (!image_decoder_client.has_value())
+            image_decoder_client = TRY(ImageDecoderClient::Client::try_create());
+        object = TRY(try_make_ref_counted<Image>(image_decoder_client.value(), window));
+    } else
         return Error::from_string_view("Unsupported slide object type"sv);
 
     auto assign_property = [&](auto const& key, auto const& value) {
