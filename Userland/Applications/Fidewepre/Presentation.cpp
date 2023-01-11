@@ -234,6 +234,8 @@ bool Presentation::predraw_slide()
 
 ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView file_name, NonnullRefPtr<GUI::Window> window)
 {
+    auto start_time = Time::now_realtime();
+
     if (file_name.is_empty())
         return ENOENT;
     auto file = TRY(Core::Stream::File::open_file_or_standard_stream(file_name, Core::Stream::OpenMode::Read));
@@ -289,6 +291,8 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
         auto slide = TRY(Slide::parse_slide(slide_object, templates, window));
         presentation->append_slide(move(slide));
     }
+
+    dbgln("Took {} ms to load presentation.", (Time::now_realtime() - start_time).to_milliseconds());
 
     return presentation;
 }
