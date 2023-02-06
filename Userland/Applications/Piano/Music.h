@@ -18,11 +18,6 @@ namespace Music {
 // - 44,100 samples/sec
 // - 1,411.2 kbps
 
-struct Sample {
-    i16 left;
-    i16 right;
-};
-
 // HACK: needs to increase with device sample rate, but all of the sample_count stuff is static for now
 constexpr int sample_count = 1 << 10;
 
