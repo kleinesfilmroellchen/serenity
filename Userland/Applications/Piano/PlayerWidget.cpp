@@ -16,7 +16,7 @@
 #include <LibGUI/ItemListModel.h>
 #include <LibGUI/Label.h>
 
-ErrorOr<NonnullRefPtr<PlayerWidget>> PlayerWidget::create(TrackManager& manager, AudioPlayerLoop& loop)
+ErrorOr<NonnullRefPtr<PlayerWidget>> PlayerWidget::try_create(TrackManager& manager, AudioPlayerLoop& loop)
 {
     auto widget = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) PlayerWidget(manager, loop)));
 
