@@ -8,6 +8,7 @@
 #pragma once
 
 #include <AK/Assertions.h>
+#include <AK/Atomic.h>
 #include <AK/Noncopyable.h>
 #include <AK/Types.h>
 #include <pthread.h>
@@ -39,13 +40,15 @@ public:
     void lock();
     void unlock();
 
+    bool is_locked() const { return m_lock_count.load() > 0; }
+
 private:
 #ifdef AK_OS_SERENITY
     pthread_mutex_t m_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 #else
     pthread_mutex_t m_mutex;
 #endif
-    unsigned m_lock_count { 0 };
+    Atomic<unsigned, AK::memory_order_acq_rel> m_lock_count { 0 };
 };
 
 class MutexLocker {
@@ -72,16 +75,13 @@ private:
 ALWAYS_INLINE void Mutex::lock()
 {
     pthread_mutex_lock(&m_mutex);
-    m_lock_count++;
+    m_lock_count.fetch_add(1, AK::memory_order_acquire);
 }
 
 ALWAYS_INLINE void Mutex::unlock()
 {
     VERIFY(m_lock_count > 0);
-    // FIXME: We need to protect the lock count with the mutex itself.
-    // This may be bad because we're not *technically* unlocked yet,
-    // but we're not handling any errors from pthread_mutex_unlock anyways.
-    m_lock_count--;
+    m_lock_count.fetch_sub(1, AK::memory_order_release);
     pthread_mutex_unlock(&m_mutex);
 }
 

@@ -48,6 +48,8 @@ public:
         });
     }
 
+    bool is_locked() const { return m_lock.is_locked(); }
+
 private:
     [[nodiscard]] ALWAYS_INLINE MutexLocker lock() { return MutexLocker(m_lock); }
 
