@@ -366,27 +366,32 @@ void Presentation::paint(Gfx::Painter& painter)
         clear_cache();
     m_last_scale = scale;
 
-    m_slide_cache.with_locked([&, this](auto) {
-        auto possible_cached_slide = find_in_cache(m_current_slide.value(), m_current_frame_in_slide.value());
-        auto slide_invalidated = m_slides[m_current_slide.value()].fetch_and_reset_invalidation();
-        if (slide_invalidated || possible_cached_slide.is_null()) {
-            if (slide_invalidated)
-                dbgln("Redrawing slide {} because it was invalidated", m_current_slide.value());
-            auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_area.size());
-            if (maybe_slide_bitmap.is_error()) {
-                // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.
-                current_slide().paint(painter, m_current_frame_in_slide.value(), scale);
+    // If the other thread is working on the cache, sidestep it and draw directly instead.
+    if (m_slide_cache.is_locked()) {
+        current_slide().paint(painter, m_current_frame_in_slide.value(), scale);
+    } else {
+        m_slide_cache.with_locked([&, this](auto) {
+            auto possible_cached_slide = find_in_cache(m_current_slide.value(), m_current_frame_in_slide.value());
+            auto slide_invalidated = m_slides[m_current_slide.value()].fetch_and_reset_invalidation();
+            if (slide_invalidated || possible_cached_slide.is_null()) {
+                if (slide_invalidated)
+                    dbgln("Redrawing slide {} because it was invalidated", m_current_slide.value());
+                auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_area.size());
+                if (maybe_slide_bitmap.is_error()) {
+                    // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.
+                    current_slide().paint(painter, m_current_frame_in_slide.value(), scale);
+                } else {
+                    auto slide_bitmap = maybe_slide_bitmap.release_value();
+                    Gfx::Painter slide_bitmap_painter { slide_bitmap };
+                    current_slide().paint(slide_bitmap_painter, m_current_frame_in_slide.value(), scale);
+                    cache(m_current_slide.value(), m_current_frame_in_slide.value(), slide_bitmap);
+                    painter.blit(painter.clip_rect().top_left(), slide_bitmap, slide_bitmap->rect());
+                }
             } else {
-                auto slide_bitmap = maybe_slide_bitmap.release_value();
-                Gfx::Painter slide_bitmap_painter { slide_bitmap };
-                current_slide().paint(slide_bitmap_painter, m_current_frame_in_slide.value(), scale);
-                cache(m_current_slide.value(), m_current_frame_in_slide.value(), slide_bitmap);
-                painter.blit(painter.clip_rect().top_left(), slide_bitmap, slide_bitmap->rect());
+                painter.blit(painter.clip_rect().top_left(), *possible_cached_slide, possible_cached_slide->rect());
             }
-        } else {
-            painter.blit(painter.clip_rect().top_left(), *possible_cached_slide, possible_cached_slide->rect());
-        }
-    });
+        });
+    }
 
     dbgln("Took {} ms to draw slide", (Time::now_realtime() - start_time).to_milliseconds());
 
