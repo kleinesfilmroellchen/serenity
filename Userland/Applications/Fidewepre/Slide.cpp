@@ -22,13 +22,13 @@ Slide::Slide(NonnullRefPtrVector<SlideObject> slide_objects, DeprecatedString ti
 
 ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
-    auto frame_count = slide_json.get("frames"sv).to_number<unsigned>(1);
+    auto frame_count = slide_json.get_integer<unsigned>("frames"sv).value_or(1);
 
     auto const& maybe_slide_objects = slide_json.get("objects"sv);
-    if (!maybe_slide_objects.is_array())
+    if (!maybe_slide_objects.has_value() || !maybe_slide_objects->is_array())
         return Error::from_string_view("Slide objects must be an array"sv);
 
-    auto const& json_slide_objects = maybe_slide_objects.as_array();
+    auto const& json_slide_objects = maybe_slide_objects->as_array();
     NonnullRefPtrVector<SlideObject> slide_objects;
     for (auto const& maybe_slide_object_json : json_slide_objects.values()) {
         if (!maybe_slide_object_json.is_object())
@@ -40,7 +40,7 @@ ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, HashMap<Deprecat
     }
 
     // For the title, we either use the slide's explicit title, or the text of a "role=title" text object, or a fallback of "Untitled slide".
-    auto title = slide_json.get("title"sv).as_string_or(
+    auto title = slide_json.get_deprecated_string("title"sv).value_or(
         slide_objects.first_matching([&](auto const& object) { return object->role() == ObjectRole::TitleObject; })
             .flat_map([&](auto object) -> Optional<DeprecatedString> { return is<Text>(*object) ? static_ptr_cast<Text>(object)->text() : Optional<DeprecatedString> {}; })
             .value_or("Untitled slide"));

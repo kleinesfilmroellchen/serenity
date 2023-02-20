@@ -52,12 +52,15 @@ protected:
 
 private:
     void go_to_slide_from_key_sequence();
+    void update_slides_actions();
     void on_export_slides_action();
     void update_export_status();
 
     OwnPtr<Presentation> m_current_presentation;
     RefPtr<GUI::Action> m_next_slide_action;
     RefPtr<GUI::Action> m_previous_slide_action;
+    RefPtr<GUI::Action> m_full_screen_action;
+    RefPtr<GUI::Action> m_present_from_first_slide_action;
     RefPtr<GUI::SettingsWindow> m_settings_window;
 
     Vector<KeyCode, 3> m_current_key_sequence;

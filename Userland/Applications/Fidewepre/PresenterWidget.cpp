@@ -35,32 +35,36 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
 {
     auto* window = this->window();
     // Set up the menu bar.
-    auto& file_menu = window->add_menu("&File");
+    auto file_menu = TRY(window->try_add_menu("&File"));
     auto open_action = GUI::CommonActions::make_open_action([this](auto&) {
-        auto response = FileSystemAccessClient::Client::the().try_open_file_deprecated(this->window());
+        auto response = FileSystemAccessClient::Client::the().open_file(this->window());
         if (response.is_error())
             return;
-        this->set_file(response.value()->filename());
+        this->set_file(response.value().filename());
     });
 
     m_settings_window = TRY(GUI::SettingsWindow::create("Presenter Settings"));
     m_settings_window->set_icon(window->icon());
     (void)TRY(m_settings_window->add_tab<PresenterSettingsFooterWidget>("Footer", "footer"sv));
     (void)TRY(m_settings_window->add_tab<PresenterSettingsPerformanceWidget>("Performance", "performance"sv));
-    auto settings_action = GUI::Action::create("&Settings", TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/settings.png"sv)), [this](auto&) {
+    auto settings_action = GUI::Action::create("&Settings", TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/settings.png"sv)), [this](auto&) {
         m_settings_window->show();
     });
-    auto about_action = GUI::CommonActions::make_about_action("Presenter", GUI::Icon::default_icon("app-display-settings"sv));
+    auto about_action = GUI::CommonActions::make_about_action("Presenter", GUI::Icon::default_icon("app-presenter"sv));
 
     auto export_slides_action = GUI::Action::create("&Export Slides...", { KeyModifier::Mod_Ctrl, KeyCode::Key_E }, [this](auto&) { this->on_export_slides_action(); });
 
-    TRY(file_menu.try_add_action(open_action));
-    TRY(file_menu.try_add_action(export_slides_action));
-    TRY(file_menu.try_add_action(settings_action));
-    TRY(file_menu.try_add_action(about_action));
+    TRY(file_menu->try_add_action(open_action));
+    TRY(file_menu->try_add_action(export_slides_action));
+    TRY(file_menu->try_add_separator());
+    TRY(file_menu->try_add_action(settings_action));
+    TRY(file_menu->try_add_action(GUI::CommonActions::make_quit_action([](auto&) {
+        GUI::Application::the()->quit();
+    })));
+    TRY(file_menu->try_add_action(about_action));
 
-    auto& presentation_menu = window->add_menu("&Presentation");
-    auto next_slide_action = GUI::Action::create("&Next", { KeyCode::Key_Right }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/go-forward.png"sv)), [this](auto&) {
+    auto presentation_menu = TRY(window->try_add_menu("&Presentation"));
+    auto next_slide_action = GUI::Action::create("&Next", { KeyCode::Key_Right }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/go-forward.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             {
                 Threading::MutexLocker lock(m_presentation_state);
@@ -68,10 +72,11 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
                 m_presentation_state_updated.signal();
             }
             outln("Switched forward to slide {} frame {}", m_current_presentation->current_slide_number(), m_current_presentation->current_frame_in_slide_number());
+            update_slides_actions();
             update();
         }
     });
-    auto previous_slide_action = GUI::Action::create("&Previous", { KeyCode::Key_Left }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/go-back.png"sv)), [this](auto&) {
+    auto previous_slide_action = GUI::Action::create("&Previous", { KeyCode::Key_Left }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/go-back.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             {
                 Threading::MutexLocker lock(m_presentation_state);
@@ -79,25 +84,32 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
                 m_presentation_state_updated.signal();
             }
             outln("Switched backward to slide {} frame {}", m_current_presentation->current_slide_number(), m_current_presentation->current_frame_in_slide_number());
+            update_slides_actions();
             update();
         }
     });
-    TRY(presentation_menu.try_add_action(next_slide_action));
-    TRY(presentation_menu.try_add_action(previous_slide_action));
-    m_next_slide_action = next_slide_action;
-    m_previous_slide_action = previous_slide_action;
 
-    TRY(presentation_menu.try_add_action(GUI::Action::create("&Full Screen", { KeyModifier::Mod_Shift, KeyCode::Key_F5 }, { KeyCode::Key_F11 }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/fullscreen.png"sv)), [this](auto&) {
+    auto full_screen_action = GUI::Action::create("&Full Screen", { KeyModifier::Mod_Shift, KeyCode::Key_F5 }, { KeyCode::Key_F11 }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/fullscreen.png"sv)), [this](auto&) {
         this->window()->set_fullscreen(true);
-    })));
-    TRY(presentation_menu.try_add_action(GUI::Action::create("Present From First &Slide", { KeyCode::Key_F5 }, TRY(Gfx::Bitmap::try_load_from_file("/res/icons/16x16/play.png"sv)), [this](auto&) {
+    });
+    auto present_from_first_slide_action = GUI::Action::create("Present From First &Slide", { KeyCode::Key_F5 }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/play.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             Threading::MutexLocker lock(m_presentation_state);
             m_current_presentation->go_to_first_slide();
             m_presentation_state_updated.signal();
+            update_slides_actions();
         }
         this->window()->set_fullscreen(true);
-    })));
+    });
+
+    TRY(presentation_menu->try_add_action(next_slide_action));
+    TRY(presentation_menu->try_add_action(previous_slide_action));
+    TRY(presentation_menu->try_add_action(full_screen_action));
+    TRY(presentation_menu->try_add_action(present_from_first_slide_action));
+    m_next_slide_action = next_slide_action;
+    m_previous_slide_action = previous_slide_action;
+    m_full_screen_action = full_screen_action;
+    m_present_from_first_slide_action = present_from_first_slide_action;
 
     m_slide_predrawer = TRY(Threading::Thread::try_create([&]() {
         while (true) {
@@ -128,6 +140,8 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
     m_slide_predrawer->start();
     m_slide_predrawer->detach();
 
+    update_slides_actions();
+
     return {};
 }
 
@@ -144,6 +158,7 @@ void PresenterWidget::set_file(StringView file_name)
         }
         window()->set_title(DeprecatedString::formatted(title_template, m_current_presentation->title(), m_current_presentation->author()));
         set_min_size(m_current_presentation->normative_size());
+        update_slides_actions();
         // This will apply the new minimum size.
         update();
     }
@@ -254,6 +269,8 @@ void PresenterWidget::go_to_slide_from_key_sequence()
     Threading::MutexLocker lock(m_presentation_state);
     m_current_presentation->go_to_slide(slide_index);
     m_presentation_state_updated.signal();
+
+    update_slides_actions();
 }
 
 void PresenterWidget::paint_event([[maybe_unused]] GUI::PaintEvent& event)
@@ -297,6 +314,21 @@ void PresenterWidget::drop_event(GUI::DropEvent& event)
     }
 }
 
+void PresenterWidget::update_slides_actions()
+{
+    if (m_current_presentation) {
+        m_next_slide_action->set_enabled(m_current_presentation->has_next_frame());
+        m_previous_slide_action->set_enabled(m_current_presentation->has_previous_frame());
+        m_full_screen_action->set_enabled(true);
+        m_present_from_first_slide_action->set_enabled(true);
+    } else {
+        m_next_slide_action->set_enabled(false);
+        m_previous_slide_action->set_enabled(false);
+        m_full_screen_action->set_enabled(false);
+        m_present_from_first_slide_action->set_enabled(false);
+    }
+}
+
 void PresenterWidget::on_export_slides_action()
 {
     if (!m_current_presentation)
@@ -317,7 +349,7 @@ void PresenterWidget::on_export_slides_action()
         size.scale_by(2);
     }
 
-    auto maybe_slide_image = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, size);
+    auto maybe_slide_image = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, size);
     if (maybe_slide_image.is_error())
         return;
     auto slide_image = maybe_slide_image.release_value();
@@ -348,7 +380,7 @@ void PresenterWidget::on_export_slides_action()
                     return 0;
                 }
 
-                auto file = Core::Stream::File::open(path, Core::Stream::OpenMode::Truncate | Core::Stream::OpenMode::Write);
+                auto file = Core::File::open(path, Core::File::OpenMode::Truncate | Core::File::OpenMode::Write);
                 if (file.is_error()) {
                     dbgln("failed to write to path {}: {}", path, file.error());
                     m_export_state.with_locked([&](auto& state) { state = { static_cast<unsigned>(i), SlideProgress::Error }; m_export_state_updated.broadcast(); });

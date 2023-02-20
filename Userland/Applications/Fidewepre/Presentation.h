@@ -47,6 +47,8 @@ public:
 
     void next_frame();
     void previous_frame();
+    bool has_next_frame() const;
+    bool has_previous_frame() const;
     void go_to_first_slide();
     void go_to_slide(unsigned slide_index);
 

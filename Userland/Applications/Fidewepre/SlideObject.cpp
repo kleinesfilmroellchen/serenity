@@ -9,8 +9,8 @@
 #include <AK/JsonObject.h>
 #include <AK/RefPtr.h>
 #include <LibCore/Object.h>
-#include <LibCore/Stream.h>
 #include <LibGUI/Margins.h>
+#include <LibGfx/Font/Font.h>
 #include <LibGfx/Font/FontDatabase.h>
 #include <LibGfx/Font/FontStyleMapping.h>
 #include <LibGfx/Forward.h>
@@ -22,11 +22,11 @@
 
 ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
-    auto const& maybe_type = slide_object_json.get("type"sv);
-    if (!maybe_type.is_string())
+    auto const& maybe_type = slide_object_json.get_deprecated_string("type"sv);
+    if (!maybe_type.has_value())
         return Error::from_string_view("Slide object must have a type"sv);
 
-    auto type = maybe_type.as_string();
+    auto type = maybe_type.value();
     RefPtr<SlideObject> object;
     if (type == "text"sv)
         object = TRY(try_make_ref_counted<Text>());
@@ -45,13 +45,13 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
 
     // First, assign properties from the templates.
     auto const& used_templates = slide_object_json.get("templates"sv);
-    if (!used_templates.is_null()) {
-        if (!used_templates.is_array())
+    if (used_templates.has_value()) {
+        if (!used_templates->is_array())
             return Error::from_string_view("Slide object templates are not an array"sv);
 
         Vector<DeprecatedString> used_template_ids;
-        used_template_ids.ensure_capacity(used_templates.as_array().size());
-        used_templates.as_array().for_each([&](auto const& template_id) {
+        used_template_ids.ensure_capacity(used_templates->as_array().size());
+        used_templates->as_array().for_each([&](auto const& template_id) {
             used_template_ids.append(template_id.to_deprecated_string());
         });
 
@@ -144,7 +144,7 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     auto scaled_bounding_box = this->transformed_bounding_box(painter.clip_rect(), display_scale);
 
     auto scaled_font_size = display_scale.height() * static_cast<float>(m_font_size);
-    auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
+    auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, Gfx::FontWidth::Normal, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
     if (font.is_null())
         font = Gfx::FontDatabase::default_font();
 
@@ -167,7 +167,7 @@ Image::Image(NonnullRefPtr<GUI::Window> window)
 
 ErrorOr<void> Image::reload_image()
 {
-    auto file = TRY(Core::Stream::File::open(m_image_path, Core::Stream::OpenMode::Read));
+    auto file = TRY(Core::File::open(m_image_path, Core::File::OpenMode::Read));
     auto data = TRY(file->read_until_eof());
     auto maybe_decoded = TRY(ImageDecoderClient::Client::try_create())->decode_image(data);
     if (!maybe_decoded.has_value() || maybe_decoded.value().frames.size() < 1)

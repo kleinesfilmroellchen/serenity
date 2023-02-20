@@ -9,7 +9,6 @@
 #include <AK/JsonObject.h>
 #include <AK/SourceGenerator.h>
 #include <LibConfig/Client.h>
-#include <LibCore/Stream.h>
 #include <LibGUI/Window.h>
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/Forward.h>
@@ -82,6 +81,16 @@ unsigned Presentation::global_frame_number() const
         frame_count += m_slides[i].frame_count();
     frame_count += m_current_frame_in_slide.value() + 1;
     return frame_count;
+}
+
+bool Presentation::has_next_frame() const
+{
+    return !(m_current_slide.value() + 1 == m_slides.size() && m_current_frame_in_slide.value() + 1 == current_slide().frame_count());
+}
+
+bool Presentation::has_previous_frame() const
+{
+    return m_current_frame_in_slide.value() == 0 && m_current_slide.value() == 0;
 }
 
 void Presentation::next_frame()
@@ -202,7 +211,7 @@ bool Presentation::predraw_slide()
     size_t prerender_amount = 0;
 
     // Go to the next frame as far as necessary.
-    // We either look for the first not-prerendered slide, or stop once we reached the prerender count.
+    // We either look for the first not-prerendered slide, or stop once we reached the prerender count or stop once we reached an invalidated slide.
     // Note that we lock the slide cache several times here independently.
     // If a slide is incorrectly found to be non-cached, we will find that it is already cached down below.
     do {
@@ -216,14 +225,17 @@ bool Presentation::predraw_slide()
                 current_slide = min(current_slide.value() + 1u, m_slides.size() - 1);
             }
         }
-    } while (!find_in_cache(current_slide.value(), current_frame.value()).is_null() && prerender_amount < m_prerender_count);
+    } while (
+        !m_slides[current_slide.value()].fetch_and_reset_invalidation()
+        && !find_in_cache(current_slide.value(), current_frame.value()).is_null()
+        && prerender_amount < m_prerender_count);
 
     // Make sure that both accesses to the cache happen atomically, otherwise we might put a slide into the cache twice!
     return m_slide_cache.with_locked([&](auto) -> bool {
         auto possible_cached_slide = find_in_cache(current_slide.value(), current_frame.value());
         if (possible_cached_slide.is_null()) {
             auto display_size = m_normative_size.to_type<float>().scaled_by(m_last_scale.width(), m_last_scale.height()).to_type<int>();
-            auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_size);
+            auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_size);
             if (maybe_slide_bitmap.is_error())
                 return false;
             auto slide_bitmap = maybe_slide_bitmap.release_value();
@@ -242,7 +254,7 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
 
     if (file_name.is_empty())
         return ENOENT;
-    auto file = TRY(Core::Stream::File::open_file_or_standard_stream(file_name, Core::Stream::OpenMode::Read));
+    auto file = TRY(Core::File::open_file_or_standard_stream(file_name, Core::File::OpenMode::Read));
     auto contents = TRY(file->read_until_eof());
     auto content_string = StringView { contents };
     auto json = TRY(JsonValue::from_string(content_string));
@@ -254,23 +266,23 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
     if (!global_object.has_number("version"sv))
         return Error::from_string_view("Presentation file is missing a version specification"sv);
 
-    auto const version = global_object.get("version"sv).to_int(-1);
+    auto const version = global_object.get_integer<int>("version"sv).value_or(-1);
     if (version != PRESENTATION_FORMAT_VERSION)
         return Error::from_string_view("Presentation file has incompatible version"sv);
 
     auto const& maybe_metadata = global_object.get("metadata"sv);
     auto const& maybe_slides = global_object.get("slides"sv);
 
-    if (maybe_metadata.is_null() || !maybe_metadata.is_object() || maybe_slides.is_null() || !maybe_slides.is_array())
+    if (!maybe_metadata.has_value() || !maybe_metadata->is_object() || !maybe_slides.has_value() || !maybe_slides->is_array())
         return Error::from_string_view("Metadata or slides in incorrect format"sv);
 
     auto const& maybe_templates = global_object.get("templates"sv);
-    if (!maybe_templates.is_null() && !maybe_templates.is_object())
+    if (maybe_templates.has_value() && !maybe_templates->is_object())
         return Error::from_string_view("Templates are not an object"sv);
     HashMap<DeprecatedString, JsonObject> templates;
 
-    if (!maybe_templates.is_null()) {
-        auto json_templates = maybe_templates.as_object();
+    if (maybe_templates.has_value()) {
+        auto json_templates = maybe_templates->as_object();
         TRY(json_templates.try_for_each_member([&](auto const& template_id, auto const& template_data) -> ErrorOr<void> {
             if (!template_data.is_object())
                 return Error::from_string_view("Template is not an object"sv);
@@ -279,14 +291,14 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
         }));
     }
 
-    auto const& raw_metadata = maybe_metadata.as_object();
+    auto const& raw_metadata = maybe_metadata->as_object();
     auto metadata = parse_metadata(raw_metadata);
     auto size = TRY(parse_presentation_size(raw_metadata));
     metadata.set("file-name", file_name);
 
     auto presentation = Presentation::construct(size, metadata, templates);
 
-    auto const& slides = maybe_slides.as_array();
+    auto const& slides = maybe_slides->as_array();
     for (auto const& maybe_slide : slides.values()) {
         if (!maybe_slide.is_object())
             return Error::from_string_view("Slides must be objects"sv);
@@ -314,15 +326,15 @@ HashMap<DeprecatedString, DeprecatedString> Presentation::parse_metadata(JsonObj
 
 ErrorOr<Gfx::IntSize> Presentation::parse_presentation_size(JsonObject const& metadata_object)
 {
-    auto const& maybe_width = metadata_object.get("width"sv);
-    auto const& maybe_aspect = metadata_object.get("aspect"sv);
+    auto maybe_width = metadata_object.get("width"sv);
+    auto maybe_aspect = metadata_object.get("aspect"sv);
 
-    if (maybe_width.is_null() || !maybe_width.is_number() || maybe_aspect.is_null() || !maybe_aspect.is_string())
+    if (!maybe_width.has_value() || !maybe_width->is_number() || !maybe_aspect.has_value() || !maybe_aspect->is_string())
         return Error::from_string_view("Width or aspect in incorrect format"sv);
 
     // We intentionally discard floating-point data here. If you need more resolution, just use a larger width.
-    auto const width = maybe_width.to_int();
-    auto const aspect_parts = maybe_aspect.as_string().split_view(':');
+    auto const width = maybe_width->to_int();
+    auto const aspect_parts = maybe_aspect->as_string().split_view(':');
     if (aspect_parts.size() != 2)
         return Error::from_string_view("Aspect specification must have the exact format `width:height`"sv);
     auto aspect_width = aspect_parts[0].to_int<int>();
@@ -360,7 +372,7 @@ void Presentation::paint(Gfx::Painter& painter)
         if (slide_invalidated || possible_cached_slide.is_null()) {
             if (slide_invalidated)
                 dbgln("Redrawing slide {} because it was invalidated", m_current_slide.value());
-            auto maybe_slide_bitmap = Gfx::Bitmap::try_create(Gfx::BitmapFormat::BGRA8888, display_area.size());
+            auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_area.size());
             if (maybe_slide_bitmap.is_error()) {
                 // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.
                 current_slide().paint(painter, m_current_frame_in_slide.value(), scale);

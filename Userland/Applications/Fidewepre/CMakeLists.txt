@@ -22,5 +22,5 @@ set(GENERATED_SOURCES
     PresenterSettingsPerformanceGML.h
 )
 
-serenity_app(Fidewepre ICON app-display-settings)
+serenity_app(Fidewepre ICON app-presenter)
 target_link_libraries(Fidewepre PRIVATE LibImageDecoderClient LibGUI LibGfx LibFileSystemAccessClient LibConfig LibCore LibMain LibThreading)
