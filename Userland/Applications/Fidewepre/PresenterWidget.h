@@ -44,6 +44,8 @@ public:
     // Errors that happen here are directly displayed to the user.
     void set_file(StringView file_name);
 
+    Optional<Presentation&> current_presentation() { return m_current_presentation ? *m_current_presentation.ptr() : Optional<Presentation&> {}; }
+
 protected:
     virtual void paint_event(GUI::PaintEvent&) override;
     virtual void keydown_event(GUI::KeyEvent&) override;

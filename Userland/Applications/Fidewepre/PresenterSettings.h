@@ -9,6 +9,8 @@
 #include <LibGUI/CheckBox.h>
 #include <LibGUI/SettingsWindow.h>
 
+class PresenterWidget;
+
 class PresenterSettingsFooterWidget : public GUI::SettingsWindow::Tab {
     C_OBJECT(PresenterSettingsFooterWidget)
 public:
@@ -32,8 +34,9 @@ public:
     virtual void cancel_settings() override;
 
 private:
-    PresenterSettingsPerformanceWidget();
+    PresenterSettingsPerformanceWidget(NonnullRefPtr<PresenterWidget> presenter_widget);
 
     RefPtr<GUI::SpinBox> m_cache_size;
     RefPtr<GUI::SpinBox> m_prerender_count;
+    NonnullRefPtr<PresenterWidget> m_presenter_widget;
 };

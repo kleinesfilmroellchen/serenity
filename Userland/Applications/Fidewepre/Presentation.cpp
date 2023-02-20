@@ -209,6 +209,8 @@ bool Presentation::predraw_slide()
     auto current_frame = m_current_frame_in_slide;
     auto current_slide = m_current_slide;
     size_t prerender_amount = 0;
+    bool slide_was_invalidated = false;
+    bool found_in_cache = false;
 
     // Go to the next frame as far as necessary.
     // We either look for the first not-prerendered slide, or stop once we reached the prerender count or stop once we reached an invalidated slide.
@@ -225,15 +227,17 @@ bool Presentation::predraw_slide()
                 current_slide = min(current_slide.value() + 1u, m_slides.size() - 1);
             }
         }
+        slide_was_invalidated = m_slides[current_slide.value()].fetch_and_reset_invalidation();
+        found_in_cache = !find_in_cache(current_slide.value(), current_frame.value()).is_null();
     } while (
-        !m_slides[current_slide.value()].fetch_and_reset_invalidation()
-        && !find_in_cache(current_slide.value(), current_frame.value()).is_null()
+        !slide_was_invalidated
+        && found_in_cache
         && prerender_amount < m_prerender_count);
 
     // Make sure that both accesses to the cache happen atomically, otherwise we might put a slide into the cache twice!
     return m_slide_cache.with_locked([&](auto) -> bool {
         auto possible_cached_slide = find_in_cache(current_slide.value(), current_frame.value());
-        if (possible_cached_slide.is_null()) {
+        if (possible_cached_slide.is_null() || slide_was_invalidated) {
             auto display_size = m_normative_size.to_type<float>().scaled_by(m_last_scale.width(), m_last_scale.height()).to_type<int>();
             auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_size);
             if (maybe_slide_bitmap.is_error())
@@ -374,8 +378,6 @@ void Presentation::paint(Gfx::Painter& painter)
             auto possible_cached_slide = find_in_cache(m_current_slide.value(), m_current_frame_in_slide.value());
             auto slide_invalidated = m_slides[m_current_slide.value()].fetch_and_reset_invalidation();
             if (slide_invalidated || possible_cached_slide.is_null()) {
-                if (slide_invalidated)
-                    dbgln("Redrawing slide {} because it was invalidated", m_current_slide.value());
                 auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_area.size());
                 if (maybe_slide_bitmap.is_error()) {
                     // If we're OOM, at least paint directly which usually doesn't allocate as much as an entire bitmap.
@@ -393,7 +395,7 @@ void Presentation::paint(Gfx::Painter& painter)
         });
     }
 
-    dbgln("Took {} ms to draw slide", (Time::now_realtime() - start_time).to_milliseconds());
+    dbgln("Took {} ms to draw slide {} frame {}", (Time::now_realtime() - start_time).to_milliseconds(), m_current_slide.value(), m_current_frame_in_slide.value());
 
     auto footer_text = this->footer_text();
     if (footer_text.has_value())

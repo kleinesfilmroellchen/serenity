@@ -174,7 +174,6 @@ ErrorOr<void> Image::reload_image()
         return Error::from_string_view("Could not decode image"sv);
     // FIXME: Handle multi-frame images.
     m_currently_loaded_image.with_locked([&](auto& image) { image = maybe_decoded.value().frames.first().bitmap; });
-    dbgln("Invalidating image {}", m_image_path);
     m_invalidated.store(true);
     return {};
 }
