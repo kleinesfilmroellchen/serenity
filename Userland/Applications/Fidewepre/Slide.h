@@ -12,10 +12,12 @@
 #include <AK/NonnullOwnPtrVector.h>
 #include <LibGfx/Forward.h>
 
+class Presentation;
+
 // A single slide of a presentation.
 class Slide final {
 public:
-    static ErrorOr<Slide> parse_slide(JsonObject const& slide_json, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
+    static ErrorOr<Slide> parse_slide(JsonObject const& slide_json, Presentation const& presentation, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
 
     unsigned frame_count() const { return m_frame_count; }
     StringView title() const { return m_title; }

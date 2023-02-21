@@ -36,6 +36,8 @@ public:
     Core::DateTime last_modified() const;
     Gfx::IntSize normative_size() const { return m_normative_size; }
 
+    String path() const { return m_file_name; }
+
     Slide const& current_slide() const { return m_slides[m_current_slide.value()]; }
     Span<Slide const> slides() const { return m_slides; }
     unsigned current_slide_number() const { return m_current_slide.value(); }
@@ -78,8 +80,8 @@ private:
     static HashMap<DeprecatedString, DeprecatedString> parse_metadata(JsonObject const& metadata_object);
     static ErrorOr<Gfx::IntSize> parse_presentation_size(JsonObject const& metadata_object);
 
-    Presentation(Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates);
-    static NonnullOwnPtr<Presentation> construct(Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates);
+    Presentation(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates);
+    static NonnullOwnPtr<Presentation> construct(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates);
 
     void append_slide(Slide slide);
 
@@ -87,6 +89,8 @@ private:
     // Also marks the found entry as "hit" if possible.
     RefPtr<Gfx::Bitmap> find_in_cache(unsigned slide_index, unsigned frame_index);
     void clear_cache();
+
+    String m_file_name {};
 
     Vector<Slide> m_slides {};
     // This is not a pixel size, but an abstract size used by the slide objects for relative positioning.

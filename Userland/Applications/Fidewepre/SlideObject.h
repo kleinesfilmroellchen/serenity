@@ -10,6 +10,7 @@
 #include <AK/Forward.h>
 #include <AK/NonnullOwnPtr.h>
 #include <AK/NonnullRefPtr.h>
+#include <AK/String.h>
 #include <LibCore/Object.h>
 #include <LibGUI/Application.h>
 #include <LibGUI/MessageBox.h>
@@ -29,6 +30,8 @@ enum class ObjectRole {
     TitleObject,
 };
 
+class Presentation;
+
 // Anything that can be on a slide.
 // For properties set in the file, we re-use the Core::Object property facility.
 class SlideObject : public Core::Object {
@@ -37,7 +40,7 @@ class SlideObject : public Core::Object {
 public:
     virtual ~SlideObject() = default;
 
-    static ErrorOr<NonnullRefPtr<SlideObject>> parse_slide_object(JsonObject const& slide_object_json, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
+    static ErrorOr<NonnullRefPtr<SlideObject>> parse_slide_object(JsonObject const& slide_object_json, Presentation const&, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
 
     bool is_visible_during_frame([[maybe_unused]] unsigned frame_number) const { return m_frames.is_empty() || m_frames.contains(frame_number); }
 
@@ -129,7 +132,7 @@ class Image : public SlideObject {
     C_OBJECT(Image);
 
 public:
-    Image(NonnullRefPtr<GUI::Window>);
+    Image(NonnullRefPtr<GUI::Window>, String presentation_path);
     virtual ~Image() = default;
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const override;
@@ -170,6 +173,7 @@ public:
 
 protected:
     DeprecatedString m_image_path;
+    String m_presentation_path;
     ImageScaling m_scaling { ImageScaling::FitSmallest };
     Gfx::Painter::ScalingMode m_scaling_mode { Gfx::Painter::ScalingMode::SmoothPixels };
 

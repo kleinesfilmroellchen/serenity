@@ -14,8 +14,9 @@
 #include <LibGfx/Forward.h>
 #include <errno_codes.h>
 
-Presentation::Presentation(Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
-    : m_normative_size(normative_size)
+Presentation::Presentation(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
+    : m_file_name(move(file_name))
+    , m_normative_size(normative_size)
     , m_metadata(move(metadata))
     , m_templates(move(templates))
 {
@@ -23,9 +24,9 @@ Presentation::Presentation(Gfx::IntSize normative_size, HashMap<DeprecatedString
     m_slide_cache_size = Config::read_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, DEFAULT_CACHE_SIZE);
 }
 
-NonnullOwnPtr<Presentation> Presentation::construct(Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
+NonnullOwnPtr<Presentation> Presentation::construct(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
 {
-    return NonnullOwnPtr<Presentation>(NonnullOwnPtr<Presentation>::Adopt, *new Presentation(normative_size, move(metadata), move(templates)));
+    return NonnullOwnPtr<Presentation>(NonnullOwnPtr<Presentation>::Adopt, *new Presentation(move(file_name), normative_size, move(metadata), move(templates)));
 }
 
 void Presentation::append_slide(Slide slide)
@@ -300,7 +301,7 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
     auto size = TRY(parse_presentation_size(raw_metadata));
     metadata.set("file-name", file_name);
 
-    auto presentation = Presentation::construct(size, metadata, templates);
+    auto presentation = Presentation::construct(TRY(String::from_utf8(file_name)), size, metadata, templates);
 
     auto const& slides = maybe_slides->as_array();
     for (auto const& maybe_slide : slides.values()) {
@@ -308,7 +309,7 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
             return Error::from_string_view("Slides must be objects"sv);
         auto const& slide_object = maybe_slide.as_object();
 
-        auto slide = TRY(Slide::parse_slide(slide_object, templates, window));
+        auto slide = TRY(Slide::parse_slide(slide_object, *presentation, templates, window));
         presentation->append_slide(move(slide));
     }
 

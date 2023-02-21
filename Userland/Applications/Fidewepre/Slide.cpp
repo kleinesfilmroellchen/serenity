@@ -5,6 +5,7 @@
  */
 
 #include "Slide.h"
+#include "Presentation.h"
 #include <AK/JsonObject.h>
 #include <AK/NonnullRefPtrVector.h>
 #include <AK/TypeCasts.h>
@@ -20,7 +21,7 @@ Slide::Slide(NonnullRefPtrVector<SlideObject> slide_objects, DeprecatedString ti
 {
 }
 
-ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
+ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation const& presentation, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
     auto frame_count = slide_json.get_integer<unsigned>("frames"sv).value_or(1);
 
@@ -35,7 +36,7 @@ ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, HashMap<Deprecat
             return Error::from_string_view("Slides must be objects"sv);
         auto const& slide_object_json = maybe_slide_object_json.as_object();
 
-        auto slide_object = TRY(SlideObject::parse_slide_object(slide_object_json, templates, window));
+        auto slide_object = TRY(SlideObject::parse_slide_object(slide_object_json, presentation, templates, window));
         slide_objects.append(move(slide_object));
     }
 

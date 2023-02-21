@@ -6,7 +6,9 @@
  */
 
 #include "SlideObject.h"
+#include "Presentation.h"
 #include <AK/JsonObject.h>
+#include <AK/LexicalPath.h>
 #include <AK/RefPtr.h>
 #include <LibCore/Object.h>
 #include <LibGUI/Margins.h>
@@ -20,7 +22,7 @@
 #include <LibGfx/TextWrapping.h>
 #include <LibImageDecoderClient/Client.h>
 
-ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
+ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, Presentation const& presentation, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
     auto const& maybe_type = slide_object_json.get_deprecated_string("type"sv);
     if (!maybe_type.has_value())
@@ -31,7 +33,7 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
     if (type == "text"sv)
         object = TRY(try_make_ref_counted<Text>());
     else if (type == "image"sv) {
-        object = TRY(try_make_ref_counted<Image>(window));
+        object = TRY(try_make_ref_counted<Image>(window, presentation.path()));
     } else
         return Error::from_string_view("Unsupported slide object type"sv);
 
@@ -151,8 +153,9 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     painter.draw_text(scaled_bounding_box, m_text.view(), *font, m_text_alignment, m_color, Gfx::TextElision::None, Gfx::TextWrapping::Wrap);
 }
 
-Image::Image(NonnullRefPtr<GUI::Window> window)
-    : m_window(move(window))
+Image::Image(NonnullRefPtr<GUI::Window> window, String presentation_path)
+    : m_presentation_path(move(presentation_path))
+    , m_window(move(window))
 {
     REGISTER_STRING_PROPERTY("path", image_path, set_image_path);
     REGISTER_ENUM_PROPERTY("scaling", scaling, set_scaling, ImageScaling,
@@ -167,7 +170,10 @@ Image::Image(NonnullRefPtr<GUI::Window> window)
 
 ErrorOr<void> Image::reload_image()
 {
-    auto file = TRY(Core::File::open(m_image_path, Core::File::OpenMode::Read));
+    auto image_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_deprecated_string() }.parent().string(),
+        m_image_path);
+
+    auto file = TRY(Core::File::open(image_path, Core::File::OpenMode::Read));
     auto data = TRY(file->read_until_eof());
     auto maybe_decoded = TRY(ImageDecoderClient::Client::try_create())->decode_image(data);
     if (!maybe_decoded.has_value() || maybe_decoded.value().frames.size() < 1)
