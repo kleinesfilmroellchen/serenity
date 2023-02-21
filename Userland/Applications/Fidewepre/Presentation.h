@@ -7,10 +7,10 @@
 #pragma once
 
 #include "Slide.h"
-#include <AK/DeprecatedString.h>
 #include <AK/Forward.h>
 #include <AK/HashMap.h>
 #include <AK/NonnullOwnPtr.h>
+#include <AK/String.h>
 #include <AK/Vector.h>
 #include <LibConfig/Listener.h>
 #include <LibCore/DateTime.h>
@@ -31,8 +31,8 @@ public:
     // We can't pass this class directly in an ErrorOr because some of the components are not properly moveable under these conditions.
     static ErrorOr<NonnullOwnPtr<Presentation>> load_from_file(StringView file_name, NonnullRefPtr<GUI::Window> window);
 
-    StringView title() const;
-    StringView author() const;
+    Utf8View title() const;
+    Utf8View author() const;
     Core::DateTime last_modified() const;
     Gfx::IntSize normative_size() const { return m_normative_size; }
 
@@ -63,9 +63,9 @@ public:
     // {slide_frame_number}: Number of frame within slide
     // {slide_frames_total}: Total number of frames within the current slide
     // {frame_number}: Counts all frames on all slides
-    DeprecatedString format_footer(StringView format) const;
+    String format_footer(Utf8View format) const;
 
-    Optional<DeprecatedString> footer_text() const;
+    Optional<String> footer_text() const;
 
     // Note that if the cache is larger than the given value, old slides will be evicted from the cache only once new slides are pushed to the cache.
     void set_cache_size(size_t cache_size);
@@ -77,11 +77,11 @@ public:
     virtual void config_u32_did_change(DeprecatedString const& domain, DeprecatedString const& group, DeprecatedString const& key, u32 value) override;
 
 private:
-    static HashMap<DeprecatedString, DeprecatedString> parse_metadata(JsonObject const& metadata_object);
+    static ErrorOr<HashMap<String, String>> parse_metadata(JsonObject const& metadata_object);
     static ErrorOr<Gfx::IntSize> parse_presentation_size(JsonObject const& metadata_object);
 
-    Presentation(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates);
-    static NonnullOwnPtr<Presentation> construct(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates);
+    Presentation(String file_name, Gfx::IntSize normative_size, HashMap<String, String> metadata, HashMap<String, JsonObject> templates);
+    static NonnullOwnPtr<Presentation> construct(String file_name, Gfx::IntSize normative_size, HashMap<String, String> metadata, HashMap<String, JsonObject> templates);
 
     void append_slide(Slide slide);
 
@@ -95,8 +95,8 @@ private:
     Vector<Slide> m_slides {};
     // This is not a pixel size, but an abstract size used by the slide objects for relative positioning.
     Gfx::IntSize m_normative_size;
-    HashMap<DeprecatedString, DeprecatedString> m_metadata;
-    HashMap<DeprecatedString, JsonObject> m_templates;
+    HashMap<String, String> m_metadata;
+    HashMap<String, JsonObject> m_templates;
 
     Checked<unsigned> m_current_slide { 0 };
     Checked<unsigned> m_current_frame_in_slide { 0 };

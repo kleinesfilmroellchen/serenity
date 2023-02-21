@@ -14,14 +14,14 @@
 #include <LibGfx/Size.h>
 #include <LibGfx/TextAlignment.h>
 
-Slide::Slide(NonnullRefPtrVector<SlideObject> slide_objects, DeprecatedString title, unsigned frame_count)
+Slide::Slide(NonnullRefPtrVector<SlideObject> slide_objects, String title, unsigned frame_count)
     : m_slide_objects(move(slide_objects))
     , m_title(move(title))
     , m_frame_count(frame_count)
 {
 }
 
-ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation const& presentation, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
+ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation const& presentation, HashMap<String, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
     auto frame_count = slide_json.get_integer<unsigned>("frames"sv).value_or(1);
 
@@ -41,10 +41,13 @@ ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation con
     }
 
     // For the title, we either use the slide's explicit title, or the text of a "role=title" text object, or a fallback of "Untitled slide".
-    auto title = slide_json.get_deprecated_string("title"sv).value_or(
+    auto maybe_title = TRY(slide_json.get_deprecated_string("title"sv).flat_map([&](auto title) -> ErrorOr<String> { return String::from_utf8(title); }));
+    auto title = maybe_title.value_or(TRY(
         slide_objects.first_matching([&](auto const& object) { return object->role() == ObjectRole::TitleObject; })
-            .flat_map([&](auto object) -> Optional<DeprecatedString> { return is<Text>(*object) ? static_ptr_cast<Text>(object)->text() : Optional<DeprecatedString> {}; })
-            .value_or("Untitled slide"));
+            .flat_map([&](auto object) -> Optional<ErrorOr<String>> {
+                return is<Text>(*object) ? String::from_utf8(static_ptr_cast<Text>(object)->text()) : Optional<ErrorOr<String>> {};
+            })
+            .value_or(TRY(String::from_utf8("Untitled slide"sv)))));
 
     return Slide { move(slide_objects), title, frame_count };
 }

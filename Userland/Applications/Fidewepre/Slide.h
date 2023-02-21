@@ -7,9 +7,9 @@
 #pragma once
 
 #include "SlideObject.h"
-#include <AK/DeprecatedString.h>
 #include <AK/Forward.h>
 #include <AK/NonnullOwnPtrVector.h>
+#include <AK/String.h>
 #include <LibGfx/Forward.h>
 
 class Presentation;
@@ -17,7 +17,7 @@ class Presentation;
 // A single slide of a presentation.
 class Slide final {
 public:
-    static ErrorOr<Slide> parse_slide(JsonObject const& slide_json, Presentation const& presentation, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
+    static ErrorOr<Slide> parse_slide(JsonObject const& slide_json, Presentation const& presentation, HashMap<String, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
 
     unsigned frame_count() const { return m_frame_count; }
     StringView title() const { return m_title; }
@@ -27,9 +27,9 @@ public:
     bool fetch_and_reset_invalidation();
 
 private:
-    Slide(NonnullRefPtrVector<SlideObject> slide_objects, DeprecatedString title, unsigned frame_count);
+    Slide(NonnullRefPtrVector<SlideObject> slide_objects, String title, unsigned frame_count);
 
     NonnullRefPtrVector<SlideObject> m_slide_objects;
-    DeprecatedString m_title;
+    String m_title;
     unsigned m_frame_count;
 };

@@ -22,7 +22,7 @@
 #include <LibGfx/TextWrapping.h>
 #include <LibImageDecoderClient/Client.h>
 
-ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, Presentation const& presentation, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
+ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, Presentation const& presentation, HashMap<String, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
     auto const& maybe_type = slide_object_json.get_deprecated_string("type"sv);
     if (!maybe_type.has_value())
@@ -51,11 +51,12 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
         if (!used_templates->is_array())
             return Error::from_string_view("Slide object templates are not an array"sv);
 
-        Vector<DeprecatedString> used_template_ids;
+        Vector<String> used_template_ids;
         used_template_ids.ensure_capacity(used_templates->as_array().size());
-        used_templates->as_array().for_each([&](auto const& template_id) {
-            used_template_ids.append(template_id.to_deprecated_string());
-        });
+        TRY(used_templates->as_array().try_for_each([&](auto const& template_id) -> ErrorOr<void> {
+            used_template_ids.append(TRY(String::from_deprecated_string(template_id.to_deprecated_string())));
+            return {};
+        }));
 
         for (auto const& template_id : used_template_ids) {
             auto referenced_template = templates.get(template_id);
@@ -146,11 +147,11 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     auto scaled_bounding_box = this->transformed_bounding_box(painter.clip_rect(), display_scale);
 
     auto scaled_font_size = display_scale.height() * static_cast<float>(m_font_size);
-    auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, Gfx::FontWidth::Normal, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
+    auto font = Gfx::FontDatabase::the().get(m_font.to_deprecated_string(), scaled_font_size, m_font_weight, Gfx::FontWidth::Normal, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
     if (font.is_null())
         font = Gfx::FontDatabase::default_font();
 
-    painter.draw_text(scaled_bounding_box, m_text.view(), *font, m_text_alignment, m_color, Gfx::TextElision::None, Gfx::TextWrapping::Wrap);
+    painter.draw_text(scaled_bounding_box, m_text.bytes_as_string_view(), *font, m_text_alignment, m_color, Gfx::TextElision::None, Gfx::TextWrapping::Wrap);
 }
 
 Image::Image(NonnullRefPtr<GUI::Window> window, String presentation_path)
@@ -171,7 +172,7 @@ Image::Image(NonnullRefPtr<GUI::Window> window, String presentation_path)
 ErrorOr<void> Image::reload_image()
 {
     auto image_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_deprecated_string() }.parent().string(),
-        m_image_path);
+        m_image_path.string());
 
     auto file = TRY(Core::File::open(image_path, Core::File::OpenMode::Read));
     auto data = TRY(file->read_until_eof());

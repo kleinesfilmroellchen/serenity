@@ -8,6 +8,7 @@
 #pragma once
 
 #include <AK/Forward.h>
+#include <AK/LexicalPath.h>
 #include <AK/NonnullOwnPtr.h>
 #include <AK/NonnullRefPtr.h>
 #include <AK/String.h>
@@ -40,7 +41,7 @@ class SlideObject : public Core::Object {
 public:
     virtual ~SlideObject() = default;
 
-    static ErrorOr<NonnullRefPtr<SlideObject>> parse_slide_object(JsonObject const& slide_object_json, Presentation const&, HashMap<DeprecatedString, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
+    static ErrorOr<NonnullRefPtr<SlideObject>> parse_slide_object(JsonObject const& slide_object_json, Presentation const&, HashMap<String, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window);
 
     bool is_visible_during_frame([[maybe_unused]] unsigned frame_number) const { return m_frames.is_empty() || m_frames.contains(frame_number); }
 
@@ -95,7 +96,11 @@ public:
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const override;
 
-    void set_font(DeprecatedString font) { m_font = move(font); }
+    void set_font(DeprecatedString font)
+    {
+        if (auto proper_font = String::from_deprecated_string(font); !proper_font.is_error())
+            m_font = proper_font.release_value();
+    }
     StringView font() const { return m_font; }
     void set_font_size(int font_size) { m_font_size = font_size; }
     int font_size() const { return m_font_size; }
@@ -103,19 +108,27 @@ public:
     unsigned font_weight() const { return m_font_weight; }
     void set_text_alignment(Gfx::TextAlignment text_alignment) { m_text_alignment = text_alignment; }
     Gfx::TextAlignment text_alignment() const { return m_text_alignment; }
-    void set_text(DeprecatedString text) { m_text = move(text); }
+    void set_text(DeprecatedString text)
+    {
+        if (auto proper_text = String::from_deprecated_string(text); !proper_text.is_error())
+            m_text = proper_text.release_value();
+    }
     StringView text() const { return m_text; }
-    void set_font_style(DeprecatedString font_style) { m_font_style = move(font_style); }
+    void set_font_style(DeprecatedString font_style)
+    {
+        if (auto proper_font_style = String::from_deprecated_string(font_style); !proper_font_style.is_error())
+            m_font_style = proper_font_style.release_value();
+    }
     StringView font_style() const { return m_font_style; }
 
 protected:
-    DeprecatedString m_text;
+    String m_text;
     // The font family, technically speaking.
-    DeprecatedString m_font;
+    String m_font;
     int m_font_size { 18 };
     unsigned m_font_weight { Gfx::FontWeight::Regular };
     Gfx::TextAlignment m_text_alignment { Gfx::TextAlignment::CenterLeft };
-    DeprecatedString m_font_style;
+    String m_font_style;
 };
 
 // How to scale an image object.
@@ -139,7 +152,7 @@ public:
 
     void set_image_path(DeprecatedString image_path)
     {
-        m_image_path = move(image_path);
+        m_image_path = LexicalPath { move(image_path) };
 
         auto image_load_action = Threading::BackgroundAction<ErrorOr<void>>::try_create(
             [this](auto&) {
@@ -148,31 +161,35 @@ public:
                 return this->reload_image();
             },
             [this](auto result) -> ErrorOr<void> {
-                if (result.is_error())
-                    GUI::MessageBox::show_error(m_window, DeprecatedString::formatted("Loading image {} failed: {}", m_image_path, result.error()));
-                else
+                if (result.is_error()) {
+                    if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, result.error()); !text.is_error())
+                        GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
+                } else {
                     // This should cause us to redraw.
                     m_window->update();
+                }
                 return {};
             });
 
         if (image_load_action.is_error()) {
             // Try to load the image synchronously instead.
             auto result = this->reload_image();
-            if (result.is_error())
-                GUI::MessageBox::show_error(m_window, DeprecatedString::formatted("Loading image {} failed: {}", m_image_path, result.error()));
+            if (result.is_error()) {
+                if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, result.error()); !text.is_error())
+                    GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
+            }
         } else {
             m_image_load_action = image_load_action.release_value();
         }
     }
-    StringView image_path() const { return m_image_path; }
+    StringView image_path() const { return m_image_path.string(); }
     void set_scaling(ImageScaling scaling) { m_scaling = scaling; }
     ImageScaling scaling() const { return m_scaling; }
     void set_scaling_mode(Gfx::Painter::ScalingMode scaling_mode) { m_scaling_mode = scaling_mode; }
     Gfx::Painter::ScalingMode scaling_mode() const { return m_scaling_mode; }
 
 protected:
-    DeprecatedString m_image_path;
+    LexicalPath m_image_path { ""sv };
     String m_presentation_path;
     ImageScaling m_scaling { ImageScaling::FitSmallest };
     Gfx::Painter::ScalingMode m_scaling_mode { Gfx::Painter::ScalingMode::SmoothPixels };

@@ -149,14 +149,15 @@ void PresenterWidget::set_file(StringView file_name)
 {
     auto presentation = Presentation::load_from_file(file_name, *window());
     if (presentation.is_error()) {
-        GUI::MessageBox::show_error(window(), DeprecatedString::formatted("The presentation \"{}\" could not be loaded.\n{}", file_name, presentation.error()));
+        if (auto message = String::formatted("The presentation \"{}\" could not be loaded.\n{}", file_name, presentation.error()); !message.is_error())
+            GUI::MessageBox::show_error(window(), message.release_value());
     } else {
         {
             Threading::MutexLocker lock(m_presentation_state);
             m_current_presentation = presentation.release_value();
             m_presentation_state_updated.signal();
         }
-        window()->set_title(DeprecatedString::formatted(title_template, m_current_presentation->title(), m_current_presentation->author()));
+        window()->set_title(DeprecatedString::formatted(title_template, m_current_presentation->title().as_string(), m_current_presentation->author().as_string()));
         set_min_size(m_current_presentation->normative_size());
         update_slides_actions();
         // This will apply the new minimum size.
@@ -333,7 +334,7 @@ void PresenterWidget::on_export_slides_action()
 {
     if (!m_current_presentation)
         return;
-    auto maybe_path = GUI::FilePicker::get_save_filepath(this->window(), DeprecatedString::formatted("{}-export", m_current_presentation->title()), "png");
+    auto maybe_path = GUI::FilePicker::get_save_filepath(this->window(), DeprecatedString::formatted("{}-export", m_current_presentation->title().as_string()), "png");
     if (!maybe_path.has_value())
         return;
     auto path = LexicalPath { maybe_path.release_value() };
@@ -372,7 +373,9 @@ void PresenterWidget::on_export_slides_action()
                 slide.paint(painter, frame, { display_scale, display_scale });
 
                 m_export_state.with_locked([&](auto& state) { state = { static_cast<unsigned>(i), SlideProgress::Writing }; m_export_state_updated.broadcast(); });
-                auto path = DeprecatedString::formatted("{}-{:03}-{:02}.png", prefix, i, frame);
+                auto maybe_path = String::formatted("{}-{:03}-{:02}.png", prefix, i, frame);
+                if (maybe_path.is_error())
+                    return 0;
                 auto png = Gfx::PNGWriter::encode(slide_image);
                 if (png.is_error()) {
                     // Do not store "done" here so that the progress window stays visible and displays the error until the user closes it.
@@ -380,7 +383,7 @@ void PresenterWidget::on_export_slides_action()
                     return 0;
                 }
 
-                auto file = Core::File::open(path, Core::File::OpenMode::Truncate | Core::File::OpenMode::Write);
+                auto file = Core::File::open(maybe_path.release_value(), Core::File::OpenMode::Truncate | Core::File::OpenMode::Write);
                 if (file.is_error()) {
                     dbgln("failed to write to path {}: {}", path, file.error());
                     m_export_state.with_locked([&](auto& state) { state = { static_cast<unsigned>(i), SlideProgress::Error }; m_export_state_updated.broadcast(); });
@@ -445,7 +448,8 @@ void PresenterWidget::update_export_status()
 
     if (status.progress == SlideProgress::Error) {
         // Don't hide the window so the user sees the error.
-        m_progress_bar->set_text(DeprecatedString::formatted("Error while writing slide {}!", status.current_slide + 1));
+        if (auto message = String::formatted("Error while writing slide {}!", status.current_slide + 1); !message.is_error())
+            m_progress_bar->set_text(message.release_value().to_deprecated_string());
         return;
     }
 

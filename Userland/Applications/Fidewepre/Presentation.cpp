@@ -8,13 +8,14 @@
 #include <AK/Forward.h>
 #include <AK/JsonObject.h>
 #include <AK/SourceGenerator.h>
+#include <AK/Utf8View.h>
 #include <LibConfig/Client.h>
 #include <LibGUI/Window.h>
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/Forward.h>
 #include <errno_codes.h>
 
-Presentation::Presentation(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
+Presentation::Presentation(String file_name, Gfx::IntSize normative_size, HashMap<String, String> metadata, HashMap<String, JsonObject> templates)
     : m_file_name(move(file_name))
     , m_normative_size(normative_size)
     , m_metadata(move(metadata))
@@ -24,7 +25,7 @@ Presentation::Presentation(String file_name, Gfx::IntSize normative_size, HashMa
     m_slide_cache_size = Config::read_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, DEFAULT_CACHE_SIZE);
 }
 
-NonnullOwnPtr<Presentation> Presentation::construct(String file_name, Gfx::IntSize normative_size, HashMap<DeprecatedString, DeprecatedString> metadata, HashMap<DeprecatedString, JsonObject> templates)
+NonnullOwnPtr<Presentation> Presentation::construct(String file_name, Gfx::IntSize normative_size, HashMap<String, String> metadata, HashMap<String, JsonObject> templates)
 {
     return NonnullOwnPtr<Presentation>(NonnullOwnPtr<Presentation>::Adopt, *new Presentation(move(file_name), normative_size, move(metadata), move(templates)));
 }
@@ -34,16 +35,20 @@ void Presentation::append_slide(Slide slide)
     m_slides.append(move(slide));
 }
 
-StringView Presentation::title() const
+Utf8View Presentation::title() const
 {
-    return m_metadata.get("title"sv).value_or(m_metadata.get("file-name"sv).value_or("Untitled Presentation"sv));
+    if (auto const title = m_metadata.get("title"sv); title.has_value())
+        return title->code_points();
+
+    // This key always exists.
+    return m_metadata.get("file-name"sv)->code_points();
 }
 
-StringView Presentation::author() const
+Utf8View Presentation::author() const
 {
-    if (m_metadata.contains("author"sv))
-        return m_metadata.get("author"sv)->view();
-    return "Unknown Author"sv;
+    if (m_metadata.contains(String::from_utf8_short_string("author"sv)))
+        return m_metadata.get("author"sv)->code_points();
+    return Utf8View { "Unknown Author"sv };
 }
 
 Core::DateTime Presentation::last_modified() const
@@ -52,7 +57,7 @@ Core::DateTime Presentation::last_modified() const
     Optional<Core::DateTime> maybe_parsed_time;
     if (maybe_time.has_value()) {
         // FIXME: possibly allow more ISO 8601 formats, for now only full date+time is possible.
-        maybe_parsed_time = Core::DateTime::parse("%Y-%m-%dT%H:%M:%S"sv, maybe_time.value());
+        maybe_parsed_time = Core::DateTime::parse("%Y-%m-%dT%H:%M:%S"sv, maybe_time.value().bytes_as_string_view());
     }
 
     if (!maybe_parsed_time.has_value())
@@ -284,22 +289,22 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
     auto const& maybe_templates = global_object.get("templates"sv);
     if (maybe_templates.has_value() && !maybe_templates->is_object())
         return Error::from_string_view("Templates are not an object"sv);
-    HashMap<DeprecatedString, JsonObject> templates;
+    HashMap<String, JsonObject> templates;
 
     if (maybe_templates.has_value()) {
         auto json_templates = maybe_templates->as_object();
         TRY(json_templates.try_for_each_member([&](auto const& template_id, auto const& template_data) -> ErrorOr<void> {
             if (!template_data.is_object())
                 return Error::from_string_view("Template is not an object"sv);
-            templates.set(template_id, template_data.as_object());
+            templates.set(TRY(String::from_deprecated_string(template_id)), template_data.as_object());
             return {};
         }));
     }
 
     auto const& raw_metadata = maybe_metadata->as_object();
-    auto metadata = parse_metadata(raw_metadata);
+    auto metadata = TRY(parse_metadata(raw_metadata));
     auto size = TRY(parse_presentation_size(raw_metadata));
-    metadata.set("file-name", file_name);
+    metadata.set(TRY(String::from_utf8("file-name"sv)), TRY(String::from_utf8(file_name)));
 
     auto presentation = Presentation::construct(TRY(String::from_utf8(file_name)), size, metadata, templates);
 
@@ -318,13 +323,14 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
     return presentation;
 }
 
-HashMap<DeprecatedString, DeprecatedString> Presentation::parse_metadata(JsonObject const& metadata_object)
+ErrorOr<HashMap<String, String>> Presentation::parse_metadata(JsonObject const& metadata_object)
 {
-    HashMap<DeprecatedString, DeprecatedString> metadata;
+    HashMap<String, String> metadata;
 
-    metadata_object.for_each_member([&](auto const& key, auto const& value) {
-        metadata.set(key, value.to_deprecated_string());
-    });
+    TRY(metadata_object.try_for_each_member([&](auto const& key, auto const& value) -> ErrorOr<void> {
+        metadata.set(TRY(String::from_deprecated_string(key)), TRY(String::from_deprecated_string(value.to_deprecated_string())));
+        return {};
+    }));
 
     return metadata;
 }
@@ -400,38 +406,50 @@ void Presentation::paint(Gfx::Painter& painter)
 
     auto footer_text = this->footer_text();
     if (footer_text.has_value())
-        painter.draw_text(painter.clip_rect(), format_footer(*footer_text), Gfx::TextAlignment::BottomCenter);
+        painter.draw_text(painter.clip_rect(), format_footer(footer_text->code_points()), Gfx::TextAlignment::BottomCenter);
 }
 
-Optional<DeprecatedString> Presentation::footer_text() const
+Optional<String> Presentation::footer_text() const
 {
     auto override_enabled = Config::read_bool("Presenter"sv, "Footer"sv, "OverrideFooter"sv, false);
     if (override_enabled) {
         auto footer_enabled = Config::read_bool("Presenter"sv, "Footer"sv, "EnableFooter"sv, true);
         if (!footer_enabled)
             return {};
-        return Config::read_string("Presenter"sv, "Footer"sv, "FooterText"sv, "{presentation_title}: {slide_title} ({slide_number}/{slides_total}), frame {slide_frame_number}, last modified {date}"sv);
+
+        auto maybe_footer = String::from_deprecated_string(Config::read_string("Presenter"sv, "Footer"sv, "FooterText"sv, "{presentation_title}: {slide_title} ({slide_number}/{slides_total}), frame {slide_frame_number}, last modified {date}"sv));
+        if (!maybe_footer.is_error())
+            return maybe_footer.release_value();
+        return {};
     }
-    return m_metadata.get("footer-center");
+    return m_metadata.get("footer-center"sv);
 }
 
-DeprecatedString Presentation::format_footer(StringView format) const
+String Presentation::format_footer(Utf8View format) const
 {
     StringBuilder footer;
     SourceGenerator footer_generator { footer, '{', '}' };
-    footer_generator.set("presentation_title"sv, title());
+    footer_generator.set("presentation_title"sv, title().as_string());
     footer_generator.set("slide_title"sv, current_slide().title());
-    footer_generator.set("author"sv, author());
-    footer_generator.set("slides_total"sv, DeprecatedString::number(m_slides.size()));
-    footer_generator.set("frames_total"sv, DeprecatedString::number(total_frame_count()));
-    footer_generator.set("frame_number"sv, DeprecatedString::number(global_frame_number()));
-    footer_generator.set("slide_number"sv, DeprecatedString::number(current_slide_number() + 1));
-    footer_generator.set("slide_frames_total"sv, DeprecatedString::number(current_slide().frame_count()));
-    footer_generator.set("slide_frame_number"sv, DeprecatedString::number(current_frame_in_slide_number() + 1));
+    footer_generator.set("author"sv, author().as_string());
+    if (auto slides_total = String::number(m_slides.size()); !slides_total.is_error())
+        footer_generator.set("slides_total"sv, slides_total.value().to_deprecated_string());
+    if (auto frames_total = String::number(total_frame_count()); !frames_total.is_error())
+        footer_generator.set("frames_total"sv, frames_total.value().to_deprecated_string());
+    if (auto frame_number = String::number(global_frame_number()); !frame_number.is_error())
+        footer_generator.set("frame_number"sv, frame_number.value().to_deprecated_string());
+    if (auto slide_number = String::number(current_slide_number() + 1); !slide_number.is_error())
+        footer_generator.set("slide_number"sv, slide_number.value().to_deprecated_string());
+    if (auto slide_frames_total = String::number(current_slide().frame_count()); !slide_frames_total.is_error())
+        footer_generator.set("slide_frames_total"sv, slide_frames_total.value().to_deprecated_string());
+    if (auto slide_frame_number = String::number(current_frame_in_slide_number() + 1); !slide_frame_number.is_error())
+        footer_generator.set("slide_frame_number"sv, slide_frame_number.value().to_deprecated_string());
     footer_generator.set("date"sv, last_modified().to_deprecated_string());
 
-    footer_generator.append(format);
-    return footer_generator.as_string();
+    footer_generator.append(format.as_string());
+    if (auto footer = String::from_utf8(footer_generator.as_string_view()); !footer.is_error())
+        return footer.release_value();
+    return {};
 }
 
 void Presentation::config_u32_did_change(DeprecatedString const& domain, DeprecatedString const& group, DeprecatedString const& key, u32 value)
