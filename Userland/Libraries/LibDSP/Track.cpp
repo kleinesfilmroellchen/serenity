@@ -14,6 +14,7 @@
 #include <LibDSP/Music.h>
 #include <LibDSP/Processor.h>
 #include <LibDSP/Track.h>
+#include <unistd.h>
 
 namespace DSP {
 
@@ -69,6 +70,12 @@ ErrorOr<void> Track::resize_internal_buffers_to(size_t buffer_size)
     for (auto& processor : m_processor_chain)
         TRY(processor->resize_internal_buffers_to(buffer_size));
 
+    FixedArray<Sample> cache = TRY(FixedArray<Sample>::create(buffer_size));
+    bool false_variable = false;
+    while (!m_sample_lock.compare_exchange_strong(false_variable, true))
+        usleep(1);
+    m_cached_sample_buffer.swap(cache);
+    m_sample_lock.store(false);
     return {};
 }
 
@@ -110,6 +117,24 @@ void Track::current_signal(FixedArray<Sample>& output_signal)
     m_second_temporary_note_buffer.clear();
     m_first_temporary_sample_buffer.clear();
     m_second_temporary_sample_buffer.clear();
+    bool false_variable = false;
+    if (m_sample_lock.compare_exchange_strong(false_variable, true)) {
+        AK::TypedTransfer<Sample>::copy(m_cached_sample_buffer.data(), output_signal.data(), m_cached_sample_buffer.size());
+    }
+    m_sample_lock.store(false);
+}
+
+void Track::write_cached_signal_to(Span<Sample> output_signal)
+{
+    bool false_variable = false;
+    while (!m_sample_lock.compare_exchange_strong(false_variable, true)) {
+        usleep(1);
+    }
+    VERIFY(output_signal.size() == m_cached_sample_buffer.size());
+
+    AK::TypedTransfer<Sample>::copy(output_signal.data(), m_cached_sample_buffer.data(), m_cached_sample_buffer.size());
+
+    m_sample_lock.store(false);
 }
 
 void NoteTrack::compute_current_clips_signal()
