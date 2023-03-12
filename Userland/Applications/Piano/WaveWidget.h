@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <AK/FixedArray.h>
 #include <LibAudio/Sample.h>
 #include <LibGUI/Frame.h>
 
@@ -29,4 +30,5 @@ private:
     int sample_to_y(float sample, float sample_max) const;
 
     TrackManager& m_track_manager;
+    FixedArray<Audio::Sample> m_samples;
 };
