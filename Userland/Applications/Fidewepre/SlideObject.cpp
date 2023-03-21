@@ -169,7 +169,7 @@ Image::Image(NonnullRefPtr<GUI::Window> window, String presentation_path)
         { Gfx::Painter::ScalingMode::BilinearBlend, "bilinear-blend" }, );
 }
 
-ErrorOr<void> Image::reload_image()
+ErrorOr<int> Image::reload_image()
 {
     auto image_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_deprecated_string() }.parent().string(),
         m_image_path.string());
@@ -182,7 +182,7 @@ ErrorOr<void> Image::reload_image()
     // FIXME: Handle multi-frame images.
     m_currently_loaded_image.with_locked([&](auto& image) { image = maybe_decoded.value().frames.first().bitmap; });
     m_invalidated.store(true);
-    return {};
+    return 0;
 }
 
 void Image::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const

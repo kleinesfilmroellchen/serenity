@@ -96,10 +96,9 @@ public:
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const override;
 
-    void set_font(DeprecatedString font)
+    void set_font(String font)
     {
-        if (auto proper_font = String::from_deprecated_string(font); !proper_font.is_error())
-            m_font = proper_font.release_value();
+        m_font = font;
     }
     StringView font() const { return m_font; }
     void set_font_size(int font_size) { m_font_size = font_size; }
@@ -108,16 +107,14 @@ public:
     unsigned font_weight() const { return m_font_weight; }
     void set_text_alignment(Gfx::TextAlignment text_alignment) { m_text_alignment = text_alignment; }
     Gfx::TextAlignment text_alignment() const { return m_text_alignment; }
-    void set_text(DeprecatedString text)
+    void set_text(String text)
     {
-        if (auto proper_text = String::from_deprecated_string(text); !proper_text.is_error())
-            m_text = proper_text.release_value();
+        m_text = text;
     }
     StringView text() const { return m_text; }
-    void set_font_style(DeprecatedString font_style)
+    void set_font_style(String font_style)
     {
-        if (auto proper_font_style = String::from_deprecated_string(font_style); !proper_font_style.is_error())
-            m_font_style = proper_font_style.release_value();
+        m_font_style = font_style;
     }
     StringView font_style() const { return m_font_style; }
 
@@ -150,25 +147,24 @@ public:
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const override;
 
-    void set_image_path(DeprecatedString image_path)
+    void set_image_path(String image_path)
     {
-        m_image_path = LexicalPath { move(image_path) };
+        m_image_path = LexicalPath { image_path.to_deprecated_string() };
 
-        auto image_load_action = Threading::BackgroundAction<ErrorOr<void>>::try_create(
+        auto image_load_action = Threading::BackgroundAction<int>::try_create(
             [this](auto&) {
                 // FIXME: shouldn't be necessary
                 Core::EventLoop loop;
                 return this->reload_image();
             },
-            [this](auto result) -> ErrorOr<void> {
-                if (result.is_error()) {
-                    if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, result.error()); !text.is_error())
-                        GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
-                } else {
-                    // This should cause us to redraw.
-                    m_window->update();
-                }
+            [this](auto) -> ErrorOr<void> {
+                // This should cause us to redraw.
+                m_window->update();
                 return {};
+            },
+            [this](auto error) {
+                if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, error); !text.is_error())
+                    GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
             });
 
         if (image_load_action.is_error()) {
@@ -177,6 +173,8 @@ public:
             if (result.is_error()) {
                 if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, result.error()); !text.is_error())
                     GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
+                else
+                    dbgln("{}", result.error());
             }
         } else {
             m_image_load_action = image_load_action.release_value();
@@ -195,9 +193,9 @@ protected:
     Gfx::Painter::ScalingMode m_scaling_mode { Gfx::Painter::ScalingMode::SmoothPixels };
 
 private:
-    ErrorOr<void> reload_image();
+    ErrorOr<int> reload_image();
 
     Threading::MutexProtected<RefPtr<Gfx::Bitmap>> m_currently_loaded_image;
     NonnullRefPtr<GUI::Window> m_window;
-    RefPtr<Threading::BackgroundAction<ErrorOr<void>>> m_image_load_action;
+    RefPtr<Threading::BackgroundAction<int>> m_image_load_action;
 };

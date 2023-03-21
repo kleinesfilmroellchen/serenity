@@ -48,7 +48,7 @@ private:
 #else
     pthread_mutex_t m_mutex;
 #endif
-    Atomic<unsigned, AK::memory_order_acq_rel> m_lock_count { 0 };
+    Atomic<unsigned, AK::memory_order_relaxed> m_lock_count { 0 };
 };
 
 class MutexLocker {

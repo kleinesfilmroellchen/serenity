@@ -27,9 +27,9 @@ public:
     bool fetch_and_reset_invalidation();
 
 private:
-    Slide(NonnullRefPtrVector<SlideObject> slide_objects, String title, unsigned frame_count);
+    Slide(Vector<NonnullRefPtr<SlideObject>> slide_objects, String title, unsigned frame_count);
 
-    NonnullRefPtrVector<SlideObject> m_slide_objects;
+    Vector<NonnullRefPtr<SlideObject>> m_slide_objects;
     String m_title;
     unsigned m_frame_count;
 };

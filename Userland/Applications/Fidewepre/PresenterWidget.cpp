@@ -45,8 +45,8 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
 
     m_settings_window = TRY(GUI::SettingsWindow::create("Presenter Settings"));
     m_settings_window->set_icon(window->icon());
-    (void)TRY(m_settings_window->add_tab<PresenterSettingsFooterWidget>("Footer", "footer"sv));
-    (void)TRY(m_settings_window->add_tab<PresenterSettingsPerformanceWidget>("Performance", "performance"sv, *this));
+    (void)TRY(m_settings_window->add_tab<PresenterSettingsFooterWidget>("Footer"_short_string, "footer"sv));
+    (void)TRY(m_settings_window->add_tab<PresenterSettingsPerformanceWidget>(TRY("Performance"_string), "performance"sv, *this));
     auto settings_action = GUI::Action::create("&Settings", TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/settings.png"sv)), [this](auto&) {
         m_settings_window->show();
     });
@@ -390,7 +390,7 @@ void PresenterWidget::on_export_slides_action()
                     return 0;
                 }
 
-                auto result = file.value()->write_entire_buffer(png.value());                    
+                auto result = file.value()->write_until_depleted(png.value());                    
                 if (result.is_error()) {
                     m_export_state.with_locked([&](auto& state) { state = { static_cast<unsigned>(i), SlideProgress::Error }; m_export_state_updated.broadcast(); });
                     return 0;

@@ -7,14 +7,13 @@
 #include "Slide.h"
 #include "Presentation.h"
 #include <AK/JsonObject.h>
-#include <AK/NonnullRefPtrVector.h>
 #include <AK/TypeCasts.h>
 #include <LibGUI/Window.h>
 #include <LibGfx/Painter.h>
 #include <LibGfx/Size.h>
 #include <LibGfx/TextAlignment.h>
 
-Slide::Slide(NonnullRefPtrVector<SlideObject> slide_objects, String title, unsigned frame_count)
+Slide::Slide(Vector<NonnullRefPtr<SlideObject>> slide_objects, String title, unsigned frame_count)
     : m_slide_objects(move(slide_objects))
     , m_title(move(title))
     , m_frame_count(frame_count)
@@ -30,7 +29,7 @@ ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation con
         return Error::from_string_view("Slide objects must be an array"sv);
 
     auto const& json_slide_objects = maybe_slide_objects->as_array();
-    NonnullRefPtrVector<SlideObject> slide_objects;
+    Vector<NonnullRefPtr<SlideObject>> slide_objects;
     for (auto const& maybe_slide_object_json : json_slide_objects.values()) {
         if (!maybe_slide_object_json.is_object())
             return Error::from_string_view("Slides must be objects"sv);
@@ -55,16 +54,16 @@ ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation con
 void Slide::paint(Gfx::Painter& painter, unsigned int current_frame, Gfx::FloatSize display_scale) const
 {
     for (auto const& object : m_slide_objects) {
-        if (object.is_visible_during_frame(current_frame))
-            object.paint(painter, display_scale);
+        if (object->is_visible_during_frame(current_frame))
+            object->paint(painter, display_scale);
     }
 }
 
 bool Slide::fetch_and_reset_invalidation()
 {
     auto invalidated { false };
-    for (auto& object : m_slide_objects) {
-        invalidated |= object.fetch_and_reset_invalidation();
-    }
+    for (auto& object : m_slide_objects)
+        invalidated |= object->fetch_and_reset_invalidation();
+
     return invalidated;
 }
