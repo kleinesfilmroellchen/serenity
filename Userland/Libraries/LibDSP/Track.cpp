@@ -114,6 +114,7 @@ void Track::cached_signal(Span<Sample> output_signal)
     while (!m_sample_lock.compare_exchange_strong(false_variable, true)) {
         usleep(1);
     }
+    VERIFY(output_signal.size() == m_cached_sample_buffer.size());
 
     AK::TypedTransfer<Sample>::copy(output_signal.data(), m_cached_sample_buffer.data(), m_cached_sample_buffer.size());
 

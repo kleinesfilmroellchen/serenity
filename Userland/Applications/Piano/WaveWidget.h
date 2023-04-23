@@ -19,6 +19,12 @@ class WaveWidget final : public GUI::Frame {
 public:
     virtual ~WaveWidget() override = default;
 
+    ErrorOr<void> set_sample_size(size_t sample_size)
+    {
+        TRY(m_samples.try_resize(sample_size));
+        return {};
+    }
+
 private:
     // Scales the sample-y value down by a bit, so that it doesn't look like it is clipping.
     static constexpr float rescale_factor = 1.2f;
@@ -30,5 +36,5 @@ private:
     int sample_to_y(float sample, float sample_max) const;
 
     TrackManager& m_track_manager;
-    FixedArray<Audio::Sample> m_samples;
+    Vector<Audio::Sample> m_samples;
 };

@@ -14,7 +14,6 @@
 
 WaveWidget::WaveWidget(TrackManager& track_manager)
     : m_track_manager(track_manager)
-    , m_samples(FixedArray<Audio::Sample>::must_create_but_fixme_should_propagate_errors(sample_count))
 {
 }
 
