@@ -1,7 +1,9 @@
 set(SOURCES
     BandAdjustmentFilter.cpp
     Clip.cpp
-    Effects.cpp
+    Processors/BandAdjustment.cpp
+    Processors/Delay.cpp
+    Processors/Mastering.cpp
     Synthesizers.cpp
     Keyboard.cpp
     Track.cpp

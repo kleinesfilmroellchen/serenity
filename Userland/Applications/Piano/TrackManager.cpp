@@ -12,7 +12,9 @@
 #include <AK/NoAllocationGuard.h>
 #include <AK/NonnullRefPtr.h>
 #include <AK/TypedTransfer.h>
-#include <LibDSP/Effects.h>
+#include <LibDSP/Processors/BandAdjustment.h>
+#include <LibDSP/Processors/Delay.h>
+#include <LibDSP/Processors/Mastering.h>
 #include <LibDSP/Synthesizers.h>
 
 TrackManager::TrackManager()

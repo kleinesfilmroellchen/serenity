@@ -11,10 +11,11 @@
 #include <AK/RefCounted.h>
 #include <AK/Weakable.h>
 #include <LibDSP/Clip.h>
-#include <LibDSP/Effects.h>
 #include <LibDSP/Keyboard.h>
 #include <LibDSP/Music.h>
 #include <LibDSP/Processor.h>
+#include <LibDSP/Processors/Delay.h>
+#include <LibDSP/Processors/Mastering.h>
 #include <LibDSP/Synthesizers.h>
 
 namespace DSP {
