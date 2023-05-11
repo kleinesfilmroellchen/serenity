@@ -35,7 +35,7 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
 {
     auto* window = this->window();
     // Set up the menu bar.
-    auto file_menu = TRY(window->try_add_menu("&File"));
+    auto file_menu = TRY(window->try_add_menu("&File"_short_string));
     auto open_action = GUI::CommonActions::make_open_action([this](auto&) {
         auto response = FileSystemAccessClient::Client::the().open_file(this->window());
         if (response.is_error())
@@ -63,7 +63,7 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
     })));
     TRY(file_menu->try_add_action(about_action));
 
-    auto presentation_menu = TRY(window->try_add_menu("&Presentation"));
+    auto presentation_menu = TRY(window->try_add_menu(TRY("&Presentation"_string)));
     auto next_slide_action = GUI::Action::create("&Next", { KeyCode::Key_Right }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/go-forward.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             {
@@ -311,7 +311,7 @@ void PresenterWidget::drop_event(GUI::DropEvent& event)
             return;
 
         window()->move_to_front();
-        set_file(urls.first().path());
+        set_file(urls.first().serialize_path(URL::ApplyPercentDecoding::Yes));
     }
 }
 

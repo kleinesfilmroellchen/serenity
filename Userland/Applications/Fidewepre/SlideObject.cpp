@@ -85,8 +85,13 @@ SlideObject::SlideObject()
         [this] {
             auto const& frames = this->frames();
             JsonArray json_frames;
-            for (auto element : frames)
-                json_frames.append(element);
+            for (auto element : frames) {
+                auto result = json_frames.append(element);
+                if (result.is_error()) {
+                    dbgln("OOM while allocating slide object frames list");
+                    return json_frames;
+                }
+            }
 
             return json_frames;
         },

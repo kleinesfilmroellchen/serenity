@@ -25,6 +25,7 @@
 #include <LibGfx/TextAlignment.h>
 #include <LibImageDecoderClient/Client.h>
 #include <LibThreading/BackgroundAction.h>
+#include <LibThreading/MutexProtected.h>
 
 enum class ObjectRole {
     Default,
