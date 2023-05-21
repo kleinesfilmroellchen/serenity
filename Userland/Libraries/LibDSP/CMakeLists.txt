@@ -4,6 +4,7 @@ set(SOURCES
     Processors/BandAdjustment.cpp
     Processors/Delay.cpp
     Processors/Mastering.cpp
+    Processors/ParametricEQ.cpp
     Synthesizers.cpp
     Keyboard.cpp
     Track.cpp

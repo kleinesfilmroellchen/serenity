@@ -34,6 +34,13 @@ public:
     Vector<ProcessorParameter&>& parameters() { return m_parameters; }
     Vector<ProcessorParameter&> const& parameters() const { return m_parameters; }
 
+    // We are informed of an audio buffer size change. This happens off-audio-thread so we can allocate.
+    virtual ErrorOr<void> resize_internal_buffers_to(size_t buffer_size)
+    {
+        (void)buffer_size;
+        return {};
+    }
+
 private:
     SignalType const m_input_type;
     SignalType const m_output_type;

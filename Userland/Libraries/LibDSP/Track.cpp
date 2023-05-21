@@ -65,6 +65,10 @@ ErrorOr<void> Track::resize_internal_buffers_to(size_t buffer_size)
 {
     m_second_temporary_sample_buffer = TRY(FixedArray<Sample>::create(buffer_size));
     m_first_temporary_sample_buffer = TRY(FixedArray<Sample>::create(buffer_size));
+
+    for (auto& processor : m_processor_chain)
+        TRY(processor->resize_internal_buffers_to(buffer_size));
+
     return {};
 }
 

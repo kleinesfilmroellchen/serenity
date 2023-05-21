@@ -12,9 +12,9 @@
 #include <AK/NoAllocationGuard.h>
 #include <AK/NonnullRefPtr.h>
 #include <AK/TypedTransfer.h>
-#include <LibDSP/Processors/BandAdjustment.h>
 #include <LibDSP/Processors/Delay.h>
 #include <LibDSP/Processors/Mastering.h>
+#include <LibDSP/Processors/ParametricEQ.h>
 #include <LibDSP/Synthesizers.h>
 
 TrackManager::TrackManager()
@@ -64,11 +64,11 @@ void TrackManager::reset()
 void TrackManager::add_track()
 {
     auto new_track = make_ref_counted<DSP::NoteTrack>(m_transport, m_keyboard);
-    MUST(new_track->resize_internal_buffers_to(m_temporary_track_buffer.size()));
     new_track->add_processor(make_ref_counted<DSP::Synthesizers::Classic>(m_transport));
     new_track->add_processor(make_ref_counted<DSP::Effects::BandAdjustment>(m_transport));
     new_track->add_processor(make_ref_counted<DSP::Effects::Delay>(m_transport));
     new_track->add_clip(0, roll_length);
+    MUST(new_track->resize_internal_buffers_to(m_temporary_track_buffer.size()));
     m_tracks.append(move(new_track));
 }
 

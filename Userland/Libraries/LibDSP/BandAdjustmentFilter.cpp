@@ -93,6 +93,8 @@ void BandAdjustmentFilter::recompute_coefficients()
             coefficient = SAMPLE_OFF;
     }
 
+    dbgln("Z = {}, N = {}", feedback.span(), feedforward.span());
+
     set_feedforward_coefficients(move(feedforward));
     set_feedback_coefficients(move(feedback));
 }
