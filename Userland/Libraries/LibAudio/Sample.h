@@ -9,6 +9,7 @@
 
 #include <AK/Format.h>
 #include <AK/Math.h>
+#include <AK/Vector.h>
 #include <math.h>
 
 namespace Audio {
@@ -68,6 +69,27 @@ struct Sample {
             result.right = max(result.right, AK::fabs(sample.right));
         }
         return result;
+    }
+
+    // Returns a list of the indices of all zero crossings in the sample data.
+    static ErrorOr<Vector<size_t>> zero_crossings(ReadonlySpan<Sample> span)
+    {
+        if (span.is_empty())
+            return Vector<size_t> {};
+
+        auto last_sample = span[0];
+        Vector<size_t> zero_crossings;
+
+        for (size_t i = 0; i < span.size(); ++i) {
+            auto const& sample = span[i];
+            if ((sample.left <= 0 && last_sample.left > 0)
+                || (sample.right <= 0 && last_sample.right > 0)) {
+                TRY(zero_crossings.try_append(i));
+            }
+            last_sample = sample;
+        }
+
+        return zero_crossings;
     }
 
     void clip()

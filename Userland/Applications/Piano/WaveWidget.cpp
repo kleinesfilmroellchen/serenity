@@ -39,7 +39,11 @@ void WaveWidget::paint_event(GUI::PaintEvent& event)
     m_track_manager.current_track()->write_cached_signal_to(m_samples.span());
     double width_scale = static_cast<double>(frame_inner_rect().width()) / m_samples.size();
 
-    auto const maximum = Audio::Sample::max_range(m_samples.span());
+    auto const zero_crossing = Audio::Sample::zero_crossings(m_samples.span()).release_value_but_fixme_should_propagate_errors();
+    auto const most_centered_zero_crossing = zero_crossing.is_empty() ? m_samples.size() / 2 : zero_crossing[(zero_crossing.size() - 1) / 2];
+    auto const x_start = most_centered_zero_crossing - m_samples.size() / 2;
+
+    auto const maximum = Audio::Sample { 1, 1 }; // Audio::Sample::max_range(m_samples.span());
     int prev_x = 0;
     int prev_y_left = sample_to_y(m_samples[0].left, maximum.left);
     int prev_y_right = sample_to_y(m_samples[0].right, maximum.right);
@@ -50,12 +54,12 @@ void WaveWidget::paint_event(GUI::PaintEvent& event)
         int y_left = sample_to_y(m_samples[x].left, maximum.left);
         int y_right = sample_to_y(m_samples[x].right, maximum.right);
 
-        Gfx::IntPoint point1_left(prev_x * width_scale, prev_y_left);
-        Gfx::IntPoint point2_left(x * width_scale, y_left);
+        Gfx::IntPoint point1_left((prev_x - x_start) * width_scale, prev_y_left);
+        Gfx::IntPoint point2_left((x - x_start) * width_scale, y_left);
         painter.draw_line(point1_left, point2_left, left_wave_color);
 
-        Gfx::IntPoint point1_right(prev_x * width_scale, prev_y_right);
-        Gfx::IntPoint point2_right(x * width_scale, y_right);
+        Gfx::IntPoint point1_right((prev_x - x_start) * width_scale, prev_y_right);
+        Gfx::IntPoint point2_right((x - x_start) * width_scale, y_right);
         painter.draw_line(point1_right, point2_right, right_wave_color);
 
         prev_x = x;
