@@ -181,7 +181,10 @@ ErrorOr<int> Image::reload_image()
 
     auto file = TRY(Core::File::open(image_path, Core::File::OpenMode::Read));
     auto data = TRY(file->read_until_eof());
-    auto maybe_decoded = TRY(ImageDecoderClient::Client::try_create())->decode_image(data);
+    auto client = TRY(ImageDecoderClient::Client::try_create());
+    auto maybe_decoded = client->decode_image(data);
+    // Manually make sure we don't keep the ImageDecoder process around.
+    client->shutdown();
     if (!maybe_decoded.has_value() || maybe_decoded.value().frames.size() < 1)
         return Error::from_string_view("Could not decode image"sv);
     // FIXME: Handle multi-frame images.
