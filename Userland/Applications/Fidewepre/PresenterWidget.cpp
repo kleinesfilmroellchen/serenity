@@ -22,8 +22,8 @@
 #include <LibGUI/Window.h>
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/Forward.h>
+#include <LibGfx/ImageFormats/PNGWriter.h>
 #include <LibGfx/Orientation.h>
-#include <LibGfx/PNGWriter.h>
 #include <LibGfx/Painter.h>
 
 PresenterWidget::PresenterWidget()

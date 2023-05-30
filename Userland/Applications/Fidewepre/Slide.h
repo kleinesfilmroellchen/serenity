@@ -8,7 +8,6 @@
 
 #include "SlideObject.h"
 #include <AK/Forward.h>
-#include <AK/NonnullOwnPtrVector.h>
 #include <AK/String.h>
 #include <LibGfx/Forward.h>
 

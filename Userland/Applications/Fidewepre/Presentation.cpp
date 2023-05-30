@@ -260,7 +260,7 @@ bool Presentation::predraw_slide()
 
 ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView file_name, NonnullRefPtr<GUI::Window> window)
 {
-    auto start_time = Time::now_realtime();
+    auto start_time = MonotonicTime::now();
 
     if (file_name.is_empty())
         return ENOENT;
@@ -318,7 +318,7 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
         presentation->append_slide(move(slide));
     }
 
-    dbgln("Took {} ms to load presentation.", (Time::now_realtime() - start_time).to_milliseconds());
+    dbgln("Took {} ms to load presentation.", (MonotonicTime::now() - start_time).to_milliseconds());
 
     return presentation;
 }
@@ -371,7 +371,7 @@ void Presentation::paint(Gfx::Painter& painter)
     // FIXME: Fill the background with a color depending on the color scheme
     painter.clear_rect(painter.clip_rect(), Color::White);
 
-    auto start_time = Time::now_realtime();
+    auto start_time = MonotonicTime::now();
 
     if (m_last_scale != scale)
         clear_cache();
@@ -402,7 +402,7 @@ void Presentation::paint(Gfx::Painter& painter)
         });
     }
 
-    dbgln("Took {} ms to draw slide {} frame {}", (Time::now_realtime() - start_time).to_milliseconds(), m_current_slide.value(), m_current_frame_in_slide.value());
+    dbgln("Took {} ms to draw slide {} frame {}", (MonotonicTime::now() - start_time).to_milliseconds(), m_current_slide.value(), m_current_frame_in_slide.value());
 
     auto footer_text = this->footer_text();
     if (footer_text.has_value())
