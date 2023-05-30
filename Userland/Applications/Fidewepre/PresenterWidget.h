@@ -65,7 +65,9 @@ private:
     RefPtr<GUI::Action> m_present_from_first_slide_action;
     RefPtr<GUI::SettingsWindow> m_settings_window;
 
+    RefPtr<Core::Timer> m_fullscreen_hide_cursor_timer;
     Vector<KeyCode, 3> m_current_key_sequence;
+
     RefPtr<Threading::BackgroundAction<int>> m_exporter;
     Threading::MutexProtected<ExportState> m_export_state {};
     Threading::ConditionVariable m_export_state_updated { m_export_state };

@@ -91,7 +91,12 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
 
     auto full_screen_action = GUI::Action::create("&Full Screen", { KeyModifier::Mod_Shift, KeyCode::Key_F5 }, { KeyCode::Key_F11 }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/fullscreen.png"sv)), [this](auto&) {
         this->window()->set_fullscreen(true);
+        this->m_fullscreen_hide_cursor_timer->restart();
     });
+    m_fullscreen_hide_cursor_timer = TRY(Core::Timer::create_single_shot(6'000, [this] {
+        if (this->window()->is_fullscreen())
+            this->set_override_cursor(Gfx::StandardCursor::Hidden);
+    }));
     auto present_from_first_slide_action = GUI::Action::create("Present From First &Slide", { KeyCode::Key_F5 }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/play.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             Threading::MutexLocker lock(m_presentation_state);
@@ -99,7 +104,7 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
             m_presentation_state_updated.signal();
             update_slides_actions();
         }
-        this->window()->set_fullscreen(true);
+        this->m_full_screen_action->activate();
     });
 
     TRY(presentation_menu->try_add_action(next_slide_action));
@@ -169,6 +174,9 @@ void PresenterWidget::keydown_event(GUI::KeyEvent& event)
 {
     if (event.key() == Key_Escape && window()->is_fullscreen()) {
         window()->set_fullscreen(false);
+        if (m_fullscreen_hide_cursor_timer)
+            m_fullscreen_hide_cursor_timer->stop();
+        this->set_override_cursor(Gfx::StandardCursor::None);
         event.accept();
         return;
     }
