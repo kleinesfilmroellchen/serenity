@@ -28,7 +28,7 @@
 
 PresenterWidget::PresenterWidget()
 {
-    set_min_size(100, 100);
+    set_min_size(300, 300);
 }
 
 ErrorOr<void> PresenterWidget::initialize_menubar()
@@ -163,6 +163,7 @@ void PresenterWidget::set_file(StringView file_name)
             m_presentation_state_updated.signal();
         }
         window()->set_title(DeprecatedString::formatted(title_template, m_current_presentation->title().as_string(), m_current_presentation->author().as_string()));
+        window()->set_resize_aspect_ratio(m_current_presentation->normative_size());
         set_min_size(m_current_presentation->normative_size());
         update_slides_actions();
         // This will apply the new minimum size.
