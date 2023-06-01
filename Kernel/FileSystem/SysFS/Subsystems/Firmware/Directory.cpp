@@ -22,7 +22,9 @@ UNMAP_AFTER_INIT void FirmwareSysFSDirectory::initialize()
 void FirmwareSysFSDirectory::create_components()
 {
     MUST(m_child_components.with([&](auto& list) -> ErrorOr<void> {
+#if ARCH(X86_64)
         list.append(BIOSSysFSDirectory::must_create(*this));
+#endif
         if (ACPI::is_enabled())
             list.append(ACPI::ACPISysFSDirectory::must_create(*this));
         return {};
