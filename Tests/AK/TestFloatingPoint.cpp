@@ -97,6 +97,7 @@ enum class ApproximationKind {
     Taylor4,
     // TaylorBen,
     CubicBen,
+    Sun,
 };
 
 template<FloatingPoint T>
@@ -333,6 +334,16 @@ double log2_impl<ApproximationKind::BKM10>(double a)
     return bkm_log2<10>(a);
 }
 
+template<>
+double log2_impl<ApproximationKind::Sun>(double a)
+{
+    auto s = (a - 1) / (a + 1);
+    auto xsq = s * s;
+    auto ln_approx = xsq * (0.6666666666666735130 + xsq * (0.3999999999940941908 + xsq * (0.2857142874366239149 + xsq * (0.2222219843214978396 + xsq * (0.1818357216161805012 + xsq * (0.1531383769920937332 + xsq * (0.1479819860511658591)))))));
+    auto log_approx = (2 * s + s * ln_approx) * 1.4426950408889634;
+    return log_approx;
+}
+
 template<ApproximationKind kind>
 static double log2(double x)
 {
@@ -418,4 +429,8 @@ BENCHMARK_CASE(BKM20_log)
 BENCHMARK_CASE(BKM10_log)
 {
     EXPECT(benchmark_log<ApproximationKind::BKM10>() != 0.0);
+}
+BENCHMARK_CASE(Sun_log)
+{
+    EXPECT(benchmark_log<ApproximationKind::Sun>() != 0.0);
 }

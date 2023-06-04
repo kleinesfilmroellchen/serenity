@@ -92,10 +92,10 @@ foreach(source IN LISTS AK_TEST_SOURCES)
     serenity_test("${source}" AK)
 endforeach()
 
-set_source_files_properties( 
-    TestFloatingPoint
-    PROPERTIES
-    COMPILE_FLAGS -Ofast
-)
+# set_source_files_properties( 
+#     TestFloatingPoint
+#     PROPERTIES
+#     COMPILE_FLAGS -Ofast
+# )
 
 target_link_libraries(TestString PRIVATE LibUnicode)
