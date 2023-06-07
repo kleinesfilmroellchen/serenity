@@ -26,6 +26,8 @@
 #include <Kernel/Sections.h>
 #include <Kernel/Tasks/Process.h>
 
+#include <Kernel/Arch/aarch64/ASM_wrapper.h>
+
 extern u8 start_of_kernel_image[];
 extern u8 end_of_kernel_image[];
 extern u8 start_of_kernel_text[];
@@ -1170,6 +1172,7 @@ void MemoryManager::unquickmap_page()
     VirtualAddress vaddr(KERNEL_QUICKMAP_PER_CPU_BASE + Processor::current_id() * PAGE_SIZE);
     u32 pte_idx = (vaddr.get() - KERNEL_PT1024_BASE) / PAGE_SIZE;
     auto& pte = ((PageTableEntry*)boot_pd_kernel_pt1023)[pte_idx];
+    Aarch64::Asm::flush_data_cache(vaddr.get(), PAGE_SIZE);
     pte.clear();
     flush_tlb_local(vaddr);
     mm_data.m_quickmap_in_use.unlock(mm_data.m_quickmap_previous_interrupts_state);
