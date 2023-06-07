@@ -296,6 +296,7 @@ if [ -z "$SERENITY_MACHINE" ]; then
         SERENITY_MACHINE="
         -M raspi3b
         -serial stdio
+        $SERENITY_BOOT_DRIVE
         "
     else
         SERENITY_MACHINE="
