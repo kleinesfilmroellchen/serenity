@@ -12,7 +12,6 @@
 #include <AK/Vector.h>
 #include <LibAudio/ConnectionToServer.h>
 #include <LibAudio/Loader.h>
-#include <LibAudio/Resampler.h>
 #include <LibAudio/Sample.h>
 #include <LibCore/Timer.h>
 

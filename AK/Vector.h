@@ -547,11 +547,13 @@ public:
         return {};
     }
 
-    ErrorOr<void> try_extend(Vector const& other)
+    template<typename SpanLike>
+    ErrorOr<void> try_extend(SpanLike other)
+    requires(requires(SpanLike const value) { { value.size() } -> SameAs<size_t>; { value.data() } -> SameAs<StorageType const*>; })
     {
         TRY(try_grow_capacity(size() + other.size()));
         TypedTransfer<StorageType>::copy(data() + m_size, other.data(), other.size());
-        m_size += other.m_size;
+        m_size += other.size();
         return {};
     }
 

@@ -24,6 +24,7 @@
 #include <LibThreading/ConditionVariable.h>
 #include <LibThreading/Mutex.h>
 #include <LibThreading/Thread.h>
+#include <LibAudio/Resampler.h>
 #include <sys/types.h>
 
 namespace AudioServer {
@@ -64,7 +65,7 @@ public:
             // FIXME: Our resampler and the way we resample here are bad.
             //        Ideally, we should both do perfect band-corrected resampling,
             //        as well as carry resampling state over between buffers.
-            auto attempted_resample = Audio::ResampleHelper<Audio::Sample> {
+            auto attempted_resample = Audio::ZeroOrderHoldResampler<Audio::Sample> {
                 m_sample_rate == 0 ? audiodevice_sample_rate : m_sample_rate, audiodevice_sample_rate
             }
                                           .try_resample(result.release_value());
