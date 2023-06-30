@@ -28,7 +28,7 @@ WavWriter::WavWriter(int sample_rate, u16 num_channels, PcmSampleFormat sample_f
 WavWriter::~WavWriter()
 {
     if (!m_finalized)
-        finalize();
+        MUST(finalize());
 }
 
 ErrorOr<void> WavWriter::set_file(StringView path)
@@ -72,22 +72,18 @@ ErrorOr<void> WavWriter::write_samples(Span<Sample> samples)
     return {};
 }
 
-void WavWriter::finalize()
+ErrorOr<void> WavWriter::finalize()
 {
     VERIFY(!m_finalized);
     m_finalized = true;
 
     if (m_file && m_file->is_open()) {
-        auto result = [&]() -> ErrorOr<void> {
-            TRY(m_file->seek(0, SeekMode::SetPosition));
-            return TRY(write_header());
-        }();
-
-        if (result.is_error())
-            dbgln("Failed to finalize WavWriter: {}", result.error());
+        TRY(m_file->seek(0, SeekMode::SetPosition));
+        return TRY(write_header());
         m_file->close();
     }
     m_data_sz = 0;
+    return {};
 }
 
 ErrorOr<void> WavWriter::write_header()
