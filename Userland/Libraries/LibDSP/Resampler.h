@@ -10,11 +10,11 @@
 #include <AK/Math.h>
 #include <AK/OwnPtr.h>
 #include <AK/Span.h>
-#include <AK/Vector.h>
 #include <AK/TypedTransfer.h>
-#include <LibC/math.h>
+#include <AK/Vector.h>
 #include <LibDSP/FIRFilter.h>
 #include <LibDSP/Window.h>
+#include <math.h>
 
 namespace DSP {
 
@@ -70,7 +70,10 @@ public:
 
 private:
     InterpolatedSinc(Vector<double>&& table, size_t taps, size_t oversample)
-        : m_sinc_table(table), m_sinc_taps(taps), m_sinc_lookup_oversample(oversample), m_index_offset((m_sinc_taps + 1) * m_sinc_lookup_oversample)
+        : m_sinc_table(table)
+        , m_sinc_taps(taps)
+        , m_sinc_lookup_oversample(oversample)
+        , m_index_offset((m_sinc_taps + 1) * m_sinc_lookup_oversample)
     {
     }
 
@@ -84,11 +87,19 @@ template<typename SampleType>
 class SincResampler {
 public:
     SincResampler(double ratio, Function<double(double)>&& sinc_function, size_t sinc_taps, Vector<SampleType>&& input_buffer, FIRFilter<SampleType, double>&& lowpass)
-        : m_phase(0), m_sinc_taps(sinc_taps), m_processed_sample_count(0), m_ratio(ratio), m_sinc_function(move(sinc_function)), m_input_buffer_size(input_buffer.size()), m_input_buffer(move(input_buffer)), m_lowpass(move(lowpass))
+        : m_phase(0)
+        , m_sinc_taps(sinc_taps)
+        , m_processed_sample_count(0)
+        , m_ratio(ratio)
+        , m_sinc_function(move(sinc_function))
+        , m_input_buffer_size(input_buffer.size())
+        , m_input_buffer(move(input_buffer))
+        , m_lowpass(move(lowpass))
     {
     }
 
-    static ErrorOr<SincResampler> create(u32 rate_from, u32 rate_to, size_t max_input_buffer_size, Function<double(double)>&& sinc_function, size_t sinc_taps, double transition_bandwidth_hz) {
+    static ErrorOr<SincResampler> create(u32 rate_from, u32 rate_to, size_t max_input_buffer_size, Function<double(double)>&& sinc_function, size_t sinc_taps, double transition_bandwidth_hz)
+    {
         double const ratio = rate_from / static_cast<double>(rate_to);
 
         // Cutoff frequency as a fraction of pi (1/2 is the nyquist frequency)
@@ -147,6 +158,8 @@ public:
 
         return samples_written;
     }
+
+    constexpr double ratio() const { return m_ratio; }
 
 private:
     static ErrorOr<FIRFilter<SampleType, double>> calculate_lowpass(double cutoff, double transition_bandwidth)

@@ -6,7 +6,7 @@
  */
 
 #include "ClientAudioStream.h"
-#include <LibAudio/Resampler.h>
+#include <LibDSP/Resampler.h>
 
 namespace AudioServer {
 
@@ -25,8 +25,23 @@ bool ClientAudioStream::is_connected() const
     return m_client && m_client->is_open();
 }
 
+ErrorOr<void> ClientAudioStream::ensure_resampler(u32 audiodevice_sample_rate)
+{
+    if (m_resampler.has_value() && m_resampler->ratio() == m_sample_rate / static_cast<double>(audiodevice_sample_rate))
+        return {};
+
+    auto sinc_function = TRY(DSP::InterpolatedSinc::create(13, 512));
+    m_resampler = TRY((DSP::SincResampler<Audio::Sample>::create(m_sample_rate, audiodevice_sample_rate, Audio::AUDIO_BUFFER_SIZE, move(sinc_function), 13, 2000)));
+
+    return {};
+}
+
 ErrorOr<Audio::Sample> ClientAudioStream::get_next_sample(u32 audiodevice_sample_rate)
 {
+    // If the sample rate changes underneath us, we will still play the existing buffer unchanged until we're done.
+    // This is not a significant problem since the buffers are very small (~100 samples or less).
+    TRY(ensure_resampler(audiodevice_sample_rate));
+
     // Note: Even though we only check client state here, we will probably close the client much earlier.
     if (!is_connected())
         return Error::from_string_view("Audio client disconnected"sv);
@@ -43,16 +58,10 @@ ErrorOr<Audio::Sample> ClientAudioStream::get_next_sample(u32 audiodevice_sample
 
             return Error::from_string_view("Audio client can't keep up"sv);
         }
-        // FIXME: Our resampler and the way we resample here are bad.
-        //        Ideally, we should both do perfect band-corrected resampling,
-        //        as well as carry resampling state over between buffers.
-        auto resampled = TRY((Audio::ResampleHelper<Audio::Sample> {
-            m_sample_rate == 0 ? audiodevice_sample_rate : m_sample_rate, audiodevice_sample_rate }
-                                  .try_resample(result.release_value())));
+        TRY(m_current_audio_chunk.try_resize_and_keep_capacity(static_cast<size_t>(ceil(m_resampler->ratio() * Audio::AUDIO_BUFFER_SIZE))));
+        auto actual_size = m_resampler->process(result.value().span(), m_current_audio_chunk);
+        TRY(m_current_audio_chunk.try_resize_and_keep_capacity(actual_size));
 
-        // If the sample rate changes underneath us, we will still play the existing buffer unchanged until we're done.
-        // This is not a significant problem since the buffers are very small (~100 samples or less).
-        m_current_audio_chunk = resampled;
         m_in_chunk_location = 0;
     }
 

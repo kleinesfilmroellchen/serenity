@@ -15,6 +15,7 @@
 #include <AK/RefCounted.h>
 #include <AK/WeakPtr.h>
 #include <LibAudio/Queue.h>
+#include <LibDSP/Resampler.h>
 
 namespace AudioServer {
 
@@ -42,9 +43,12 @@ public:
     void set_sample_rate(u32 sample_rate);
 
 private:
+    ErrorOr<void> ensure_resampler(u32 audiodevice_sample_rate);
+
     OwnPtr<Audio::AudioQueue> m_buffer;
     Vector<Audio::Sample> m_current_audio_chunk;
     size_t m_in_chunk_location;
+    Optional<DSP::SincResampler<Audio::Sample>> m_resampler {};
 
     bool m_paused { true };
     bool m_muted { false };
