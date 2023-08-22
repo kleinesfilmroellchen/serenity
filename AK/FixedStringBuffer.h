@@ -41,7 +41,7 @@ public:
         return vformatted(fmtstr.view(), variadic_format_parameters);
     }
 
-    void store_characters(StringView characters)
+    constexpr void store_characters(StringView characters)
     {
         // NOTE: Only store the characters up to the first null terminator
         // because we don't care about any further characters.
@@ -90,21 +90,22 @@ public:
     }
 #endif
 
-    Span<u8> storage()
+    constexpr Span<u8> storage()
     {
         return m_storage.span();
     }
-    StringView representable_view() const { return StringView(m_storage.data(), m_stored_length); }
-    Span<u8 const> span_view_ensuring_ending_null_char()
+    constexpr StringView representable_view() const { return StringView(m_storage.data(), m_stored_length); }
+    constexpr Span<u8 const> span_view_ensuring_ending_null_char()
     {
         VERIFY(m_stored_length + 1 <= Size);
         m_storage[m_stored_length] = '\0';
         return Span<u8 const>(m_storage.data(), m_stored_length + 1);
     }
 
-    size_t stored_length() const { return m_stored_length; }
+    static constexpr size_t fixed_length() { return Size; }
+    constexpr size_t stored_length() const { return m_stored_length; }
 
-    FixedStringBuffer()
+    constexpr FixedStringBuffer()
     {
         m_storage.fill(0);
     }
