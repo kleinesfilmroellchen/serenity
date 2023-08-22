@@ -9,6 +9,7 @@
 #include <AK/Array.h>
 #include <AK/StringBuilder.h>
 #include <AK/StringView.h>
+#include <AK/Traits.h>
 #include <AK/TypedTransfer.h>
 #include <AK/Userspace.h>
 
@@ -104,9 +105,23 @@ public:
         m_storage.fill(0);
     }
 
+    template<size_t OtherSize>
+    constexpr bool operator==(FixedStringBuffer<OtherSize> const& other) const
+    {
+        return this->representable_view() == other.representable_view();
+    }
+
 private:
     Array<u8, Size> m_storage;
     size_t m_stored_length { 0 };
+};
+
+template<size_t Size>
+struct Traits<FixedStringBuffer<Size>> : public GenericTraits<FixedStringBuffer<Size>> {
+    static constexpr unsigned hash(FixedStringBuffer<Size> value)
+    {
+        return Traits<StringView>::hash(value.representable_view());
+    }
 };
 
 }
