@@ -547,6 +547,9 @@ if (BUILD_LAGOM)
         add_executable(markdown-check ../../Userland/Utilities/markdown-check.cpp)
         target_link_libraries(markdown-check LibFileSystem LibMarkdown LibMain LibManual)
 
+        add_executable(notifysoundc ../../Userland/Utilities/notifysoundc.cpp)
+        target_link_libraries(notifysoundc LibCore LibMain LibAudio)
+
         if (NOT EMSCRIPTEN)
             add_executable(ntpquery ../../Userland/Utilities/ntpquery.cpp)
             target_link_libraries(ntpquery LibCore LibMain)

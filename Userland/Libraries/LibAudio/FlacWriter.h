@@ -41,6 +41,7 @@ class FlacWriter : public Encoder {
     AK_MAKE_NONCOPYABLE(FlacWriter);
     AK_MAKE_NONMOVABLE(FlacWriter);
 
+public:
     /// Tunable static parameters. Please try to improve these; only some have already been well-tuned!
 
     // Constant block size.
@@ -70,11 +71,12 @@ class FlacWriter : public Encoder {
         FullyFinalized,
     };
 
-public:
     static ErrorOr<NonnullOwnPtr<FlacWriter>> create(NonnullOwnPtr<SeekableStream> stream, u32 sample_rate = 44100, u8 num_channels = 2, u16 bits_per_sample = 16);
     virtual ~FlacWriter();
 
     virtual ErrorOr<void> write_samples(ReadonlySpan<Sample> samples) override;
+    // If necessary, samples are constant-filled to the block size.
+    ErrorOr<void> flush_samples_with_padding();
 
     virtual ErrorOr<void> finalize() override;
 
@@ -94,6 +96,7 @@ public:
     virtual void sample_count_hint(size_t sample_count) override;
 
     virtual ErrorOr<void> set_metadata(Metadata const& metadata) override;
+    ErrorOr<void> add_application_block(StringView application_id, ReadonlyBytes block_data);
 
     ErrorOr<void> finalize_header_format();
 

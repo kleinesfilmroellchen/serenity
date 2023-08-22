@@ -130,9 +130,8 @@ MaybeLoaderError FlacLoaderPlugin::parse_header()
             TRY(load_picture(block));
             break;
         case FlacMetadataBlockType::APPLICATION:
-            // Note: Third-party library can encode specific data in this.
-            dbgln("FLAC Warning: Unknown 'Application' metadata block encountered.");
-            [[fallthrough]];
+            TRY(m_application_metadata_blocks.try_append(move(block)));
+            break;
         case FlacMetadataBlockType::PADDING:
             // Note: A padding block is empty and does not need any treatment.
             break;
@@ -271,6 +270,19 @@ ErrorOr<FlacRawMetadataBlock, LoaderError> FlacLoaderPlugin::next_meta_block(Big
     };
 }
 #undef FLAC_VERIFY
+
+Optional<ReadonlyBytes> FlacLoaderPlugin::data_for_application(StringView application_id) const
+{
+    for (auto const& application_block : m_application_metadata_blocks) {
+        // Spec-noncompliant block (size must be >= 4) which we should ignore.
+        if (application_block.data.size() < 4)
+            continue;
+        auto block_id = application_block.data.bytes().trim(4);
+        if (block_id == application_id.bytes())
+            return application_block.data.span().slice(4);
+    }
+    return {};
+}
 
 MaybeLoaderError FlacLoaderPlugin::reset()
 {

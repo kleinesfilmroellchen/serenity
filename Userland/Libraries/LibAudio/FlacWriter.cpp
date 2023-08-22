@@ -225,6 +225,30 @@ ErrorOr<void> FlacWriter::write_header()
     }
 
     m_cached_metadata_blocks.clear();
+
+    TRY(m_cached_seektable.insert_seek_point({
+        .sample_index = m_sample_count,
+        .byte_offset = TRY(m_stream->tell()),
+    }));
+
+    return {};
+}
+ErrorOr<void> FlacWriter::add_application_block(StringView application_id, ReadonlyBytes block_data)
+{
+    AllocatingMemoryStream stream;
+    TRY(stream.write_until_depleted(application_id.bytes()));
+    TRY(stream.write_until_depleted(block_data));
+
+    auto data = TRY(stream.read_until_eof());
+    TRY(add_metadata_block(
+        {
+            .is_last_block = false,
+            .type = FlacMetadataBlockType::APPLICATION,
+            .length = static_cast<u32>(data.size()),
+            .data = move(data),
+        },
+        0));
+
     return {};
 }
 
@@ -256,7 +280,7 @@ ErrorOr<void> FlacWriter::write_metadata_block(FlacRawMetadataBlock& block)
         TRY(m_stream->seek(last_padding.start, SeekMode::SetPosition));
 
         // No more padding after this: the new block is the last.
-        auto new_size = last_padding.size - block.length;
+        auto new_size = last_padding.size - (block.length + 4);
         if (new_size == 0)
             block.is_last_block = true;
 
@@ -466,6 +490,26 @@ ErrorOr<void> FlacWriter::write_samples(ReadonlySpan<Sample> samples)
         TRY(write_frame());
         m_sample_buffer.clear();
     }
+
+    return {};
+}
+
+ErrorOr<void> FlacWriter::flush_samples_with_padding()
+{
+    if (m_state == WriteState::FullyFinalized)
+        return Error::from_string_view("File is already finalized"sv);
+
+    if (m_sample_buffer.is_empty())
+        return {};
+
+    TRY(m_sample_buffer.try_resize_and_keep_capacity(block_size));
+    TRY(write_frame());
+    m_sample_buffer.clear();
+
+    TRY(m_cached_seektable.insert_seek_point({
+        .sample_index = m_sample_count,
+        .byte_offset = TRY(m_stream->tell()),
+    }));
 
     return {};
 }

@@ -54,6 +54,11 @@ ErrorOr<NonnullRefPtr<Loader>, LoaderError> Loader::create(ReadonlyBytes buffer)
     return adopt_ref(*new (nothrow) Loader(TRY(Loader::create_plugin(move(stream)))));
 }
 
+ErrorOr<NonnullRefPtr<Loader>, LoaderError> Loader::create(NonnullOwnPtr<SeekableStream> stream)
+{
+    return adopt_ref(*new (nothrow) Loader(TRY(Loader::create_plugin(move(stream)))));
+}
+
 ErrorOr<NonnullOwnPtr<LoaderPlugin>, LoaderError> Loader::create_plugin(NonnullOwnPtr<SeekableStream> stream)
 {
     for (auto const& loader : s_initializers) {
