@@ -111,6 +111,18 @@ public:
         m_storage.fill(0);
     }
 
+    template<size_t N>
+    requires(N <= Size)
+    constexpr FixedStringBuffer(char const (&characters)[N])
+    {
+        store_characters({ characters, N });
+    }
+
+    constexpr explicit FixedStringBuffer(StringView characters)
+    {
+        store_characters(characters);
+    }
+
     template<size_t OtherSize>
     constexpr bool operator==(FixedStringBuffer<OtherSize> const& other) const
     {
