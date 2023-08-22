@@ -16,6 +16,7 @@
 #include <AK/Stream.h>
 #include <AK/StringView.h>
 #include <AK/Try.h>
+#include <AK/TypeCasts.h>
 #include <LibAudio/GenericTypes.h>
 #include <LibAudio/LoaderError.h>
 #include <LibAudio/Metadata.h>
@@ -87,6 +88,7 @@ class Loader : public RefCounted<Loader> {
 public:
     static ErrorOr<NonnullRefPtr<Loader>, LoaderError> create(StringView path);
     static ErrorOr<NonnullRefPtr<Loader>, LoaderError> create(ReadonlyBytes buffer);
+    static ErrorOr<NonnullRefPtr<Loader>, LoaderError> create(NonnullOwnPtr<SeekableStream> stream);
 
     // Will only read less samples if we're at the end of the stream.
     LoaderSamples get_more_samples(size_t samples_to_read_from_input = 128 * KiB);
@@ -112,6 +114,15 @@ public:
     PcmSampleFormat pcm_format() const { return m_plugin->pcm_format(); }
     Metadata const& metadata() const { return m_plugin->metadata(); }
     Vector<PictureData> const& pictures() const { return m_plugin->pictures(); }
+
+    template<typename PluginType>
+    requires(IsBaseOf<LoaderPlugin, PluginType>)
+    Optional<PluginType const&> plugin()
+    {
+        if (is<PluginType>(m_plugin.ptr()))
+            return static_cast<PluginType const&>(*m_plugin);
+        return {};
+    }
 
 private:
     static ErrorOr<NonnullOwnPtr<LoaderPlugin>, LoaderError> create_plugin(NonnullOwnPtr<SeekableStream> stream);

@@ -17,7 +17,7 @@ A SOSN block consists of a list of notification sound entries, each exactly 24 b
 | Bytes | Entry                                                                                                                                               |
 | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 8     | Sample number where this notification sound starts.                                                                                                 |
-| 16    | ID of the notification sound in UTF-8; see below. If the notification sound is shorter than 16 bytes, the end is padded with ignored spaces (0x20). |
+| 16    | ID of the notification sound in UTF-8; see below. If the notification sound is shorter than 16 bytes, the end is padded with null bytes (0x00). |
 
 Notification sounds stretch from their start point until either the start point of the next notification sound, or the end of the file. The notification sounds do not have to be ordered by start point (different from seek table entries). Since seeking to the start of a notification sound is a common operation, it is strongly recommended that (1) this start point lands on the beginning of a FLAC frame, and (2) this start point be in the (regular) FLAC seek table.
 

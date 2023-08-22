@@ -58,6 +58,8 @@ public:
     bool is_fixed_blocksize_stream() const { return m_min_block_size == m_max_block_size; }
     bool sample_count_unknown() const { return m_total_samples == 0; }
 
+    Optional<ReadonlyBytes> data_for_application(StringView application_id) const;
+
 private:
     MaybeLoaderError initialize();
     MaybeLoaderError parse_header();
@@ -103,6 +105,8 @@ private:
     u32 m_max_frame_size { 0 }; // 24 bit
     u64 m_total_samples { 0 };  // 36 bit
     u8 m_md5_checksum[128 / 8]; // 128 bit (!)
+    Vector<FlacRawMetadataBlock> m_application_metadata_blocks;
+
     size_t m_loaded_samples { 0 };
 
     // keep track of the start of the data in the FLAC stream to seek back more easily

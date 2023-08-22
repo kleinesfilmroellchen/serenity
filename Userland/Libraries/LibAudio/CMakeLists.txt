@@ -9,6 +9,7 @@ set(SOURCES
     WavWriter.cpp
     Metadata.cpp
     MP3Loader.cpp
+    NotificationSoundCollection.cpp
     PlaybackStream.cpp
     QOALoader.cpp
     QOATypes.cpp

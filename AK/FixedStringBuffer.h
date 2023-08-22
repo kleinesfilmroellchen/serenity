@@ -95,6 +95,10 @@ public:
     {
         return m_storage.span();
     }
+    constexpr ReadonlySpan<u8> storage() const
+    {
+        return m_storage.span();
+    }
     constexpr StringView representable_view() const { return StringView(m_storage.data(), m_stored_length); }
 
     static constexpr size_t fixed_length() { return Size; }
@@ -121,6 +125,12 @@ public:
     constexpr bool operator==(FixedStringBuffer<OtherSize> const& other) const
     {
         return this->representable_view() == other.representable_view();
+    }
+
+    template<size_t OtherSize>
+    constexpr int operator<=>(FixedStringBuffer<OtherSize> const& other) const
+    {
+        return this->representable_view() <=> other.representable_view();
     }
 
 private:
