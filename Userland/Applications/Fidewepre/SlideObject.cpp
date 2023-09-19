@@ -10,7 +10,7 @@
 #include <AK/JsonObject.h>
 #include <AK/LexicalPath.h>
 #include <AK/RefPtr.h>
-#include <LibCore/Object.h>
+#include <LibCore/EventReceiver.h>
 #include <LibGUI/Margins.h>
 #include <LibGfx/Font/Font.h>
 #include <LibGfx/Font/FontDatabase.h>
@@ -152,7 +152,7 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     auto scaled_bounding_box = this->transformed_bounding_box(painter.clip_rect(), display_scale);
 
     auto scaled_font_size = display_scale.height() * static_cast<float>(m_font_size);
-    auto font = Gfx::FontDatabase::the().get(m_font.to_deprecated_string(), scaled_font_size, m_font_weight, Gfx::FontWidth::Normal, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
+    auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, Gfx::FontWidth::Normal, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
     if (font.is_null())
         font = Gfx::FontDatabase::default_font();
 

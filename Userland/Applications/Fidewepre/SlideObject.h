@@ -12,7 +12,7 @@
 #include <AK/NonnullOwnPtr.h>
 #include <AK/NonnullRefPtr.h>
 #include <AK/String.h>
-#include <LibCore/Object.h>
+#include <LibCore/EventReceiver.h>
 #include <LibGUI/Application.h>
 #include <LibGUI/MessageBox.h>
 #include <LibGUI/Window.h>
@@ -35,8 +35,8 @@ enum class ObjectRole {
 class Presentation;
 
 // Anything that can be on a slide.
-// For properties set in the file, we re-use the Core::Object property facility.
-class SlideObject : public Core::Object {
+// For properties set in the file, we re-use the GUI::Object property facility.
+class SlideObject : public GUI::Object {
     C_OBJECT_ABSTRACT(SlideObject);
 
 public:

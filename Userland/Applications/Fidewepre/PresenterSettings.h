@@ -11,14 +11,19 @@
 
 class PresenterWidget;
 
-class PresenterSettingsFooterWidget : public GUI::SettingsWindow::Tab {
-    C_OBJECT(PresenterSettingsFooterWidget)
+namespace Fidewepre {
+
+class FooterWidget : public GUI::SettingsWindow::Tab {
+    C_OBJECT_ABSTRACT(FooterWidget)
 public:
     virtual void apply_settings() override;
     virtual void cancel_settings() override;
 
+    static ErrorOr<NonnullRefPtr<FooterWidget>> create();
+
 private:
-    PresenterSettingsFooterWidget();
+    static ErrorOr<NonnullRefPtr<FooterWidget>> try_create();
+    FooterWidget();
 
     void on_footer_settings_override_change();
 
@@ -27,16 +32,21 @@ private:
     RefPtr<GUI::CheckBox> m_override_footer;
 };
 
-class PresenterSettingsPerformanceWidget : public GUI::SettingsWindow::Tab {
-    C_OBJECT(PresenterSettingsPerformanceWidget)
+class PerformanceWidget : public GUI::SettingsWindow::Tab {
+    C_OBJECT_ABSTRACT(PerformanceWidget)
 public:
     virtual void apply_settings() override;
     virtual void cancel_settings() override;
 
+    static ErrorOr<NonnullRefPtr<PerformanceWidget>> create(NonnullRefPtr<PresenterWidget> presenter_widget);
+
 private:
-    PresenterSettingsPerformanceWidget(NonnullRefPtr<PresenterWidget> presenter_widget);
+    static ErrorOr<NonnullRefPtr<PerformanceWidget>> try_create();
+    PerformanceWidget();
 
     RefPtr<GUI::SpinBox> m_cache_size;
     RefPtr<GUI::SpinBox> m_prerender_count;
-    NonnullRefPtr<PresenterWidget> m_presenter_widget;
+    RefPtr<PresenterWidget> m_presenter_widget;
 };
+
+}

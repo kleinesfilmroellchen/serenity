@@ -5,30 +5,34 @@
  */
 
 #include "PresenterSettings.h"
-#include <Applications/Fidewepre/PresenterSettingsFooterGML.h>
-#include <Applications/Fidewepre/PresenterSettingsPerformanceGML.h>
 #include <Applications/Fidewepre/PresenterWidget.h>
 #include <LibConfig/Client.h>
 #include <LibGUI/SpinBox.h>
 #include <LibGUI/TextBox.h>
 
-PresenterSettingsFooterWidget::PresenterSettingsFooterWidget()
-{
-    MUST(load_from_gml(presenter_settings_footer_gml));
-    m_override_footer = find_descendant_of_type_named<GUI::CheckBox>("override_footer");
-    m_enable_footer = find_descendant_of_type_named<GUI::CheckBox>("enable_footer");
-    m_footer_text = find_descendant_of_type_named<GUI::TextEditor>("footer_text");
+namespace Fidewepre {
 
-    m_override_footer->on_checked = [this](auto) { this->on_footer_settings_override_change(); this->set_modified(true); };
-    m_enable_footer->on_checked = [this](auto) { this->set_modified(true); };
-    m_footer_text->on_change = [this] { this->set_modified(true); };
+FooterWidget::FooterWidget() = default;
+PerformanceWidget::PerformanceWidget() = default;
+
+ErrorOr<NonnullRefPtr<FooterWidget>> FooterWidget::create()
+{
+    auto widget = TRY(try_create());
+
+    widget->m_override_footer = widget->find_descendant_of_type_named<GUI::CheckBox>("override_footer");
+    widget->m_enable_footer = widget->find_descendant_of_type_named<GUI::CheckBox>("enable_footer");
+    widget->m_footer_text = widget->find_descendant_of_type_named<GUI::TextEditor>("footer_text");
+    widget->m_override_footer->on_checked = [=](auto) { widget->on_footer_settings_override_change(); widget->set_modified(true); };
+    widget->m_enable_footer->on_checked = [=](auto) { widget->set_modified(true); };
+    widget->m_footer_text->on_change = [=] { widget->set_modified(true); };
 
     // Our implementation resets the UI settings input widgets to the stored config values.
-    cancel_settings();
-    on_footer_settings_override_change();
+    widget->cancel_settings();
+    widget->on_footer_settings_override_change();
+    return widget;
 }
 
-void PresenterSettingsFooterWidget::apply_settings()
+void FooterWidget::apply_settings()
 {
     Config::write_bool("Presenter"sv, "Footer"sv, "OverrideFooter"sv, m_override_footer->is_checked());
     Config::write_bool("Presenter"sv, "Footer"sv, "EnableFooter"sv, m_enable_footer->is_checked());
@@ -36,14 +40,14 @@ void PresenterSettingsFooterWidget::apply_settings()
 }
 
 // Enables or disables footer override settings input to make it clear when they have effect and when not.
-void PresenterSettingsFooterWidget::on_footer_settings_override_change()
+void FooterWidget::on_footer_settings_override_change()
 {
     auto is_overridden = m_override_footer->is_checked();
     m_enable_footer->set_enabled(is_overridden);
     m_footer_text->set_enabled(is_overridden);
 }
 
-void PresenterSettingsFooterWidget::cancel_settings()
+void FooterWidget::cancel_settings()
 {
     auto override_state = Config::read_bool("Presenter"sv, "Footer"sv, "OverrideFooter"sv, false);
     auto enable_state = Config::read_bool("Presenter"sv, "Footer"sv, "EnableFooter"sv, true);
@@ -54,31 +58,32 @@ void PresenterSettingsFooterWidget::cancel_settings()
     m_footer_text->set_text(footer_text_state);
 }
 
-PresenterSettingsPerformanceWidget::PresenterSettingsPerformanceWidget(NonnullRefPtr<PresenterWidget> presenter_widget)
-    : m_presenter_widget(move(presenter_widget))
+ErrorOr<NonnullRefPtr<PerformanceWidget>> PerformanceWidget::create(NonnullRefPtr<PresenterWidget> presenter_widget)
 {
-    MUST(load_from_gml(presenter_settings_performance_gml));
-    m_prerender_count = find_descendant_of_type_named<GUI::SpinBox>("prerender_count");
-    m_cache_size = find_descendant_of_type_named<GUI::SpinBox>("cache_size");
+    auto widget = TRY(try_create());
+    widget->m_presenter_widget = move(presenter_widget);
+    widget->m_prerender_count = widget->find_descendant_of_type_named<GUI::SpinBox>("prerender_count");
+    widget->m_cache_size = widget->find_descendant_of_type_named<GUI::SpinBox>("cache_size");
 
-    m_cache_size->on_change = [this](auto) { this->set_modified(true); };
-    m_prerender_count->on_change = [this](auto) { this->set_modified(true); };
+    widget->m_cache_size->on_change = [=](auto) { widget->set_modified(true); };
+    widget->m_prerender_count->on_change = [=](auto) { widget->set_modified(true); };
 
-    cancel_settings();
+    widget->cancel_settings();
+    return widget;
 }
 
-void PresenterSettingsPerformanceWidget::apply_settings()
+void PerformanceWidget::apply_settings()
 {
     Config::write_u32("Presenter"sv, "Performance"sv, "PrerenderCount"sv, m_prerender_count->value());
     Config::write_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, m_cache_size->value());
 
     if (auto presentation = m_presenter_widget->current_presentation(); presentation.has_value()) {
-        presentation->config_u32_did_change("Presenter", "Performance", "PrerenderCount", m_prerender_count->value());
+        presentation->config_u32_did_change("Presenter"sv, "Performance"sv, "PrerenderCount"sv, m_prerender_count->value());
         presentation->config_u32_did_change("Presenter"sv, "Performance"sv, "CacheSize"sv, m_cache_size->value());
     }
 }
 
-void PresenterSettingsPerformanceWidget::cancel_settings()
+void PerformanceWidget::cancel_settings()
 {
     auto prerender_count = Config::read_u32("Presenter"sv, "Performance"sv, "PrerenderCount"sv, 1);
     auto cache_size = Config::read_u32("Presenter"sv, "Performance"sv, "CacheSize"sv, DEFAULT_CACHE_SIZE);
@@ -87,7 +92,9 @@ void PresenterSettingsPerformanceWidget::cancel_settings()
     m_cache_size->set_value(cache_size);
 
     if (auto presentation = m_presenter_widget->current_presentation(); presentation.has_value()) {
-        presentation->config_u32_did_change("Presenter", "Performance", "PrerenderCount", m_prerender_count->value());
+        presentation->config_u32_did_change("Presenter"sv, "Performance"sv, "PrerenderCount"sv, m_prerender_count->value());
         presentation->config_u32_did_change("Presenter"sv, "Performance"sv, "CacheSize"sv, m_cache_size->value());
     }
+}
+
 }

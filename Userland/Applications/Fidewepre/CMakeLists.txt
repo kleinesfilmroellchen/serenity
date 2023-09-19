@@ -5,8 +5,8 @@ serenity_component(
     DEPENDS ImageDecoder FileSystemAccessServer
 )
 
-compile_gml(PresenterSettingsFooter.gml PresenterSettingsFooterGML.h presenter_settings_footer_gml)
-compile_gml(PresenterSettingsPerformance.gml PresenterSettingsPerformanceGML.h presenter_settings_performance_gml)
+compile_gml(PresenterSettingsFooter.gml PresenterSettingsFooterGML.cpp)
+compile_gml(PresenterSettingsPerformance.gml PresenterSettingsPerformanceGML.cpp)
 
 set(SOURCES
     main.cpp
@@ -15,11 +15,8 @@ set(SOURCES
     PresenterWidget.cpp
     Slide.cpp
     SlideObject.cpp
-)
-
-set(GENERATED_SOURCES
-    PresenterSettingsFooterGML.h
-    PresenterSettingsPerformanceGML.h
+    PresenterSettingsFooterGML.cpp
+    PresenterSettingsPerformanceGML.cpp
 )
 
 serenity_app(Fidewepre ICON app-presenter)

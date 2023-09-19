@@ -74,7 +74,7 @@ public:
     // Returns whether predrawing was successful.
     bool predraw_slide();
 
-    virtual void config_u32_did_change(DeprecatedString const& domain, DeprecatedString const& group, DeprecatedString const& key, u32 value) override;
+    virtual void config_u32_did_change(StringView domain, StringView group, StringView key, u32 value) override;
 
 private:
     static ErrorOr<HashMap<String, String>> parse_metadata(JsonObject const& metadata_object);
@@ -107,6 +107,9 @@ private:
     Atomic<size_t> m_prerender_count { 1 };
     // This variable however must be handled very carefully in the multi-threaded environment!
     Atomic<unsigned> m_cache_time { 0 };
+
+    // Marker type to identify a cache entry that's not quite rendered yet.
+    struct [[gnu::packed]] IsMarkedForRendering { };
 
     struct SlideCacheEntry {
         unsigned slide_index;

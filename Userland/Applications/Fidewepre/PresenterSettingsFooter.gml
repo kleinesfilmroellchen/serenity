@@ -1,4 +1,4 @@
-@GUI::Widget {
+@Fidewepre::FooterWidget {
     fill_with_background_color: true
     layout: @GUI::VerticalBoxLayout {
         margins: [10]
@@ -42,7 +42,7 @@
         @GUI::TextEditor {
             name: "footer_text"
             preferred_height: "fit"
-            width: "fit"
+            preferred_width: "fit"
             placeholder: "{presentation_title} - {slide_title}"
         }
     }

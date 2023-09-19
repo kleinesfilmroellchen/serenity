@@ -1,4 +1,4 @@
-@GUI::Widget {
+@Fidewepre::PerformanceWidget {
     fill_with_background_color: true
     layout: @GUI::VerticalBoxLayout {
         margins: [10]

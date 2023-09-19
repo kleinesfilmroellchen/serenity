@@ -5,7 +5,6 @@
  */
 
 #include "PresenterWidget.h"
-#include "LibThreading/BackgroundAction.h"
 #include "Presentation.h"
 #include "PresenterSettings.h"
 #include <AK/Format.h>
@@ -25,6 +24,7 @@
 #include <LibGfx/ImageFormats/PNGWriter.h>
 #include <LibGfx/Orientation.h>
 #include <LibGfx/Painter.h>
+#include <LibThreading/BackgroundAction.h>
 
 PresenterWidget::PresenterWidget()
 {
@@ -35,7 +35,7 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
 {
     auto* window = this->window();
     // Set up the menu bar.
-    auto file_menu = TRY(window->try_add_menu("&File"_short_string));
+    auto file_menu = window->add_menu("&File"_string);
     auto open_action = GUI::CommonActions::make_open_action([this](auto&) {
         auto response = FileSystemAccessClient::Client::the().open_file(this->window());
         if (response.is_error())
@@ -45,25 +45,25 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
 
     m_settings_window = TRY(GUI::SettingsWindow::create("Presenter Settings"));
     m_settings_window->set_icon(window->icon());
-    (void)TRY(m_settings_window->add_tab<PresenterSettingsFooterWidget>("Footer"_short_string, "footer"sv));
-    (void)TRY(m_settings_window->add_tab<PresenterSettingsPerformanceWidget>(TRY("Performance"_string), "performance"sv, *this));
+    (void)TRY(m_settings_window->add_tab(TRY(Fidewepre::FooterWidget::create()), "Footer"_string, "footer"sv));
+    (void)TRY(m_settings_window->add_tab(TRY(Fidewepre::PerformanceWidget::create(*this)), "Performance"_string, "performance"sv));
     auto settings_action = GUI::Action::create("&Settings", TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/settings.png"sv)), [this](auto&) {
         m_settings_window->show();
     });
-    auto about_action = GUI::CommonActions::make_about_action("Presenter", GUI::Icon::default_icon("app-presenter"sv));
+    auto about_action = GUI::CommonActions::make_about_action("Presenter"_string, GUI::Icon::default_icon("app-presenter"sv));
 
     auto export_slides_action = GUI::Action::create("&Export Slides...", { KeyModifier::Mod_Ctrl, KeyCode::Key_E }, [this](auto&) { this->on_export_slides_action(); });
 
-    TRY(file_menu->try_add_action(open_action));
-    TRY(file_menu->try_add_action(export_slides_action));
-    TRY(file_menu->try_add_separator());
-    TRY(file_menu->try_add_action(settings_action));
-    TRY(file_menu->try_add_action(GUI::CommonActions::make_quit_action([](auto&) {
+    file_menu->add_action(open_action);
+    file_menu->add_action(export_slides_action);
+    file_menu->add_separator();
+    file_menu->add_action(settings_action);
+    file_menu->add_action(GUI::CommonActions::make_quit_action([](auto&) {
         GUI::Application::the()->quit();
-    })));
-    TRY(file_menu->try_add_action(about_action));
+    }));
+    file_menu->add_action(about_action);
 
-    auto presentation_menu = TRY(window->try_add_menu(TRY("&Presentation"_string)));
+    auto presentation_menu = window->add_menu("&Presentation"_string);
     auto next_slide_action = GUI::Action::create("&Next", { KeyCode::Key_Right }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/go-forward.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             {
@@ -97,7 +97,7 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
         if (this->window()->is_fullscreen())
             this->set_override_cursor(Gfx::StandardCursor::Hidden);
     }));
-    auto present_from_first_slide_action = GUI::Action::create("Present From First &Slide", { KeyCode::Key_F5 }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/play.png"sv)), [this](auto&) {
+    auto present_from_first_slide_action = GUI::Action::create("Present From first &Slide", { KeyCode::Key_F5 }, TRY(Gfx::Bitmap::load_from_file("/res/icons/16x16/play.png"sv)), [this](auto&) {
         if (m_current_presentation) {
             Threading::MutexLocker lock(m_presentation_state);
             m_current_presentation->go_to_first_slide();
@@ -107,10 +107,10 @@ ErrorOr<void> PresenterWidget::initialize_menubar()
         this->m_full_screen_action->activate();
     });
 
-    TRY(presentation_menu->try_add_action(next_slide_action));
-    TRY(presentation_menu->try_add_action(previous_slide_action));
-    TRY(presentation_menu->try_add_action(full_screen_action));
-    TRY(presentation_menu->try_add_action(present_from_first_slide_action));
+    presentation_menu->add_action(next_slide_action);
+    presentation_menu->add_action(previous_slide_action);
+    presentation_menu->add_action(full_screen_action);
+    presentation_menu->add_action(present_from_first_slide_action);
     m_next_slide_action = next_slide_action;
     m_previous_slide_action = previous_slide_action;
     m_full_screen_action = full_screen_action;

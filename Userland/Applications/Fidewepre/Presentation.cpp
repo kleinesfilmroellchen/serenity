@@ -46,7 +46,7 @@ Utf8View Presentation::title() const
 
 Utf8View Presentation::author() const
 {
-    if (m_metadata.contains(String::from_utf8_short_string("author"sv)))
+    if (m_metadata.contains("author"_string))
         return m_metadata.get("author"sv)->code_points();
     return Utf8View { "Unknown Author"sv };
 }
@@ -244,7 +244,7 @@ bool Presentation::predraw_slide()
     return m_slide_cache.with_locked([&](auto) -> bool {
         auto possible_cached_slide = find_in_cache(current_slide.value(), current_frame.value());
         if (possible_cached_slide.is_null() || slide_was_invalidated) {
-            auto display_size = m_normative_size.to_type<float>().scaled_by(m_last_scale.width(), m_last_scale.height()).to_type<int>();
+            auto display_size = m_normative_size.to_type<float>().scaled(m_last_scale.width(), m_last_scale.height()).to_type<int>();
             auto maybe_slide_bitmap = Gfx::Bitmap::create(Gfx::BitmapFormat::BGRA8888, display_size);
             if (maybe_slide_bitmap.is_error())
                 return false;
@@ -452,7 +452,7 @@ String Presentation::format_footer(Utf8View format) const
     return {};
 }
 
-void Presentation::config_u32_did_change(DeprecatedString const& domain, DeprecatedString const& group, DeprecatedString const& key, u32 value)
+void Presentation::config_u32_did_change(StringView domain, StringView group, StringView key, u32 value)
 {
     if (domain != "Presenter")
         return;
