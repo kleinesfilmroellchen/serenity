@@ -419,10 +419,7 @@ void PresenterWidget::on_export_slides_action()
     m_progress_window = maybe_progress_window.release_value();
     m_progress_window->set_title("Exporting Presentation");
     m_progress_window->set_minimizable(false);
-    auto maybe_progress_bar = m_progress_window->set_main_widget<GUI::Progressbar>();
-    if (maybe_progress_bar.is_error())
-        return;
-    m_progress_bar = maybe_progress_bar.release_value();
+    auto m_progress_bar = m_progress_window->set_main_widget<GUI::Progressbar>();
     m_progress_bar->set_format(GUI::Progressbar::Format::ValueSlashMax);
     m_progress_bar->set_min(1);
     m_progress_bar->set_max(static_cast<int>(slides.size()));

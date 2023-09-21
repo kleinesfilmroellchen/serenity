@@ -30,7 +30,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
 
     window->set_title("Presenter");
     window->set_icon(GUI::Icon::default_icon("app-presenter"sv).bitmap_for_size(16));
-    auto main_widget = TRY(window->set_main_widget<PresenterWidget>());
+    auto main_widget = window->set_main_widget<PresenterWidget>();
     TRY(main_widget->initialize_menubar());
     window->show();
 
