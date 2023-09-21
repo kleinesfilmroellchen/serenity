@@ -20,4 +20,8 @@ set(SOURCES
 )
 
 serenity_app(Fidewepre ICON app-presenter)
-target_link_libraries(Fidewepre PRIVATE LibImageDecoderClient LibGUI LibGfx LibFileSystemAccessClient LibConfig LibCore LibMain LibIPC LibThreading)
+target_link_libraries(Fidewepre PRIVATE
+    LibCore LibMain LibGUI LibGfx LibThreading
+    LibFileSystemAccessClient LibImageDecoderClient LibConfig LibIPC
+    LibSyntax LibWeb LibJS LibCMake LibCpp LibMarkdown LibSQL LibShell
+)

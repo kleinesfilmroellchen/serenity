@@ -10,7 +10,13 @@
 #include <AK/JsonObject.h>
 #include <AK/LexicalPath.h>
 #include <AK/RefPtr.h>
+#include <LibCMake/CMakeCache/SyntaxHighlighter.h>
+#include <LibCMake/SyntaxHighlighter.h>
 #include <LibCore/EventReceiver.h>
+#include <LibCpp/SyntaxHighlighter.h>
+#include <LibGUI/GML/SyntaxHighlighter.h>
+#include <LibGUI/GitCommitSyntaxHighlighter.h>
+#include <LibGUI/INISyntaxHighlighter.h>
 #include <LibGUI/Margins.h>
 #include <LibGfx/Font/Font.h>
 #include <LibGfx/Font/FontDatabase.h>
@@ -21,6 +27,13 @@
 #include <LibGfx/Size.h>
 #include <LibGfx/TextWrapping.h>
 #include <LibImageDecoderClient/Client.h>
+#include <LibJS/SyntaxHighlighter.h>
+#include <LibMarkdown/SyntaxHighlighter.h>
+#include <LibSQL/AST/SyntaxHighlighter.h>
+#include <LibSyntax/Highlighter.h>
+#include <LibWeb/CSS/SyntaxHighlighter/SyntaxHighlighter.h>
+#include <LibWeb/HTML/SyntaxHighlighter/SyntaxHighlighter.h>
+#include <Shell/SyntaxHighlighter.h>
 
 ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, Presentation const& presentation, HashMap<String, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
@@ -145,6 +158,7 @@ Text::Text()
     REGISTER_INT_PROPERTY("font-size", font_size, set_font_size);
     REGISTER_STRING_PROPERTY("font", font, set_font);
     REGISTER_STRING_PROPERTY("font-style", font_style, set_font_style);
+    REGISTER_STRING_PROPERTY("syntax-highlight", syntax_highlight, set_syntax_highlight);
 }
 
 void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
@@ -155,8 +169,182 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
     auto font = Gfx::FontDatabase::the().get(m_font, scaled_font_size, m_font_weight, Gfx::FontWidth::Normal, Gfx::name_to_slope(m_font_style), Gfx::Font::AllowInexactSizeMatch::Yes);
     if (font.is_null())
         font = Gfx::FontDatabase::default_font();
+    if (m_highlighting_document->has_spans()) {
+        auto draw_text = [&](auto const& rect, auto const& raw_text, Gfx::Font const& draw_font, Gfx::TextAttributes attributes) {
+            painter.draw_text(rect, raw_text, draw_font, m_text_alignment, attributes.color);
 
-    painter.draw_text(scaled_bounding_box, m_text.bytes_as_string_view(), *font, m_text_alignment, m_color, Gfx::TextElision::None, Gfx::TextWrapping::Wrap);
+            if (attributes.underline_style.has_value()) {
+                auto bottom_left = [&]() {
+                    auto point = rect.bottom_left();
+
+                    if constexpr (IsSame<RemoveCVReference<decltype(rect)>, Gfx::IntRect>)
+                        return point;
+                    else
+                        return point.template to_type<int>();
+                };
+
+                auto bottom_right = [&]() {
+                    auto point = rect.bottom_right().translated(-1, 0);
+
+                    if constexpr (IsSame<RemoveCVReference<decltype(rect)>, Gfx::IntRect>)
+                        return point;
+                    else
+                        return point.template to_type<int>();
+                };
+
+                if (attributes.underline_style == Gfx::TextAttributes::UnderlineStyle::Solid)
+                    painter.draw_line(bottom_left(), bottom_right(), attributes.underline_color.value_or(attributes.color));
+                if (attributes.underline_style == Gfx::TextAttributes::UnderlineStyle::Wavy)
+                    painter.draw_triangle_wave(bottom_left(), bottom_right(), attributes.underline_color.value_or(attributes.color), 2);
+            }
+        };
+        Gfx::TextAttributes unspanned_text_attributes;
+        unspanned_text_attributes.color = m_color;
+
+        auto const line_height = font->pixel_metrics().line_spacing();
+        size_t span_index = 0;
+        auto spans = m_highlighting_document->spans();
+
+        for (size_t line_index = 0; line_index < m_highlighting_document->lines().size(); ++line_index) {
+            auto const line = MUST(String::from_deprecated_string(m_highlighting_document->lines()[line_index].to_utf8()));
+            Gfx::FloatPoint const line_position = scaled_bounding_box.top_left().to_type<float>().moved_down(static_cast<float>(line_index) * line_height);
+            // This is a simplified copy of the text editor syntax highlighting code (no collapsed range handling or wrapping).
+            size_t next_column = 0;
+            Gfx::FloatRect span_rect = { line_position, { 0, line_height } };
+            auto draw_text_helper = [&](size_t start, size_t end, Gfx::Font const& draw_font, Gfx::TextAttributes text_attributes) {
+                size_t length = end - start;
+                if (length == 0)
+                    return;
+                auto text = line.code_points().unicode_substring_view(start, length);
+                span_rect.set_width(draw_font.width(text) + draw_font.glyph_spacing());
+                if (text_attributes.background_color.has_value()) {
+                    painter.fill_rect(span_rect.to_type<int>(), text_attributes.background_color.value());
+                }
+                draw_text(span_rect, text.as_string(), draw_font, text_attributes);
+                span_rect.translate_by(span_rect.width(), 0);
+            };
+
+            while (span_index < spans.size()) {
+                auto& span = spans[span_index];
+                // Skip spans that have ended before this point.
+                if (span.range.end().line() < line_index) {
+                    ++span_index;
+                    continue;
+                }
+                if (span.range.start().line() > line_index) {
+                    // no more spans in this line, moving on
+                    break;
+                }
+                size_t span_start;
+                if (span.range.start().line() < line_index) {
+                    span_start = 0;
+                } else {
+                    span_start = span.range.start().column();
+                }
+                size_t span_end;
+                bool span_consumed;
+                if (span.range.end().line() > line_index || span.range.end().column() > line.code_points().length()) {
+                    span_end = line.code_points().length();
+                    span_consumed = false;
+                } else {
+                    span_end = span.range.end().column();
+                    span_consumed = true;
+                }
+
+                if (span_start != next_column) {
+                    // draw unspanned text between spans
+                    draw_text_helper(next_column, span_start, *font, unspanned_text_attributes);
+                }
+                auto& span_font = span.attributes.bold ? font->bold_variant() : *font;
+                draw_text_helper(span_start, span_end, span_font, span.attributes);
+                next_column = span_end;
+                if (!span_consumed) {
+                    // continue with same span on next line
+                    break;
+                } else {
+                    ++span_index;
+                }
+            }
+            // draw unspanned text after last span
+            if (next_column < line.code_points().length()) {
+                draw_text_helper(next_column, line.code_points().length(), *font, unspanned_text_attributes);
+            }
+        }
+
+    } else {
+        painter.draw_text(scaled_bounding_box, m_text.bytes_as_string_view(), *font, m_text_alignment, m_color, Gfx::TextElision::None, Gfx::TextWrapping::Wrap);
+    }
+}
+
+void Text::set_syntax_highlight(StringView language)
+{
+    m_syntax_highlight = Syntax::language_from_name(language);
+
+    if (m_syntax_highlight.has_value()) {
+        auto const language = m_syntax_highlight.release_value();
+
+        switch (language) {
+        case Syntax::Language::Cpp:
+            m_highlighter = make<Cpp::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::CMake:
+            m_highlighter = make<CMake::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::CMakeCache:
+            m_highlighter = make<CMake::Cache::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::CSS:
+            m_highlighter = make<Web::CSS::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::GitCommit:
+            m_highlighter = make<GUI::GitCommitSyntaxHighlighter>();
+            break;
+        case Syntax::Language::GML:
+            m_highlighter = make<GUI::GML::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::HTML:
+            m_highlighter = make<Web::HTML::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::INI:
+            m_highlighter = make<GUI::IniSyntaxHighlighter>();
+            break;
+        case Syntax::Language::JavaScript:
+            m_highlighter = make<JS::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::Markdown:
+            m_highlighter = make<Markdown::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::Shell:
+            m_highlighter = make<Shell::SyntaxHighlighter>();
+            break;
+        case Syntax::Language::SQL:
+            m_highlighter = make<SQL::AST::SyntaxHighlighter>();
+            break;
+        default:
+            m_syntax_highlight = {};
+            m_highlighter = nullptr;
+        }
+    } else {
+        m_highlighter = nullptr;
+    }
+
+    if (m_highlighter != nullptr)
+        m_highlighter->attach(*this);
+
+    update_document();
+}
+
+void Text::update_document()
+{
+    m_highlighting_document->clear();
+    auto const lines = MUST(m_text.split('\n', SplitBehavior::KeepEmpty));
+    for (auto const& line : lines)
+        m_highlighting_document->add_line(line);
+
+    if (m_highlighter != nullptr) {
+        m_highlighter->rehighlight(GUI::Application::the()->palette());
+        m_invalidated = true;
+    }
 }
 
 Image::Image(NonnullRefPtr<GUI::Window> window, String presentation_path)
@@ -224,7 +412,6 @@ void Image::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
         painter.clear_clip_rect();
         painter.add_clip_rect(image_box);
 
-        // FIXME: Allow to set the scaling mode.
         painter.draw_scaled_bitmap(image_box, *image, image->rect(), 1.0f, m_scaling_mode);
 
         painter.clear_clip_rect();

@@ -64,6 +64,7 @@ The following types with their own special properties exist:
     -   `font-weight`: (string enum, see GML) Font weight of the text.
     -   `font`: (string) Font of the text, must be system-wide accessible.
     -   `text-alignment`: (string enum, see GML) Alignment of the text within the bounding box.
+    -   `syntax-highlight`: (string enum, see Syntax::Language) The (code) syntax highlighter to use for the text. When this key is missing or invalid, no syntax highlighting is performed. The names are the same used in `Syntax::language_from_name` (case insensitive). Note that the text layouting engine behaves slightly differently when syntax highlighting is enabled. Text wrapping and any alignment except top left will probably not work.
 -   `image`: An external image. The additional properties are:
     -   `path`: (string) Path to the image file. This path may be relative, then it is relative to the presenter file. The image format may be any of the image formats supported by SerenityOS.
     -   `scaling`: (string enum, optional) Controls how the image is scaled:

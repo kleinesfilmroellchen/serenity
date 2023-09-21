@@ -24,6 +24,9 @@
 #include <LibGfx/Rect.h>
 #include <LibGfx/TextAlignment.h>
 #include <LibImageDecoderClient/Client.h>
+#include <LibSyntax/Document.h>
+#include <LibSyntax/HighlighterClient.h>
+#include <LibSyntax/Language.h>
 #include <LibThreading/BackgroundAction.h>
 #include <LibThreading/MutexProtected.h>
 
@@ -88,7 +91,8 @@ protected:
     Gfx::Color m_color { Gfx::Color::Black };
 };
 
-class Text : public GraphicsObject {
+class Text : public GraphicsObject
+    , public Syntax::HighlighterClient {
     C_OBJECT(SlideObject);
 
 public:
@@ -111,6 +115,7 @@ public:
     void set_text(String text)
     {
         m_text = text;
+        update_document();
     }
     StringView text() const { return m_text; }
     void set_font_style(String font_style)
@@ -118,8 +123,27 @@ public:
         m_font_style = font_style;
     }
     StringView font_style() const { return m_font_style; }
+    StringView syntax_highlight() const
+    {
+        return m_syntax_highlight.map([](auto language) { return Syntax::language_to_string(language); }).value_or("none"sv);
+    }
+    void set_syntax_highlight(StringView language);
+
+    // ^HighlighterClient
+    virtual Vector<Syntax::TextDocumentSpan> const& spans() const override { return m_highlighting_document->spans(); }
+    virtual void set_span_at_index(size_t index, Syntax::TextDocumentSpan span) override { m_highlighting_document->set_span_at_index(index, span); }
+    virtual Vector<Syntax::TextDocumentFoldingRegion>& folding_regions() override { return m_highlighting_document->folding_regions(); }
+    virtual Vector<Syntax::TextDocumentFoldingRegion> const& folding_regions() const override { return m_highlighting_document->folding_regions(); }
+    virtual DeprecatedString highlighter_did_request_text() const override { return m_text.to_deprecated_string(); }
+    virtual void highlighter_did_request_update() override { m_invalidated = true; }
+    virtual Syntax::Document& highlighter_did_request_document() override { return m_highlighting_document; }
+    virtual Syntax::TextPosition highlighter_did_request_cursor() const override { return {}; }
+    virtual void highlighter_did_set_spans(Vector<Syntax::TextDocumentSpan> spans) override { m_highlighting_document->set_spans(Syntax::HighlighterClient::span_collection_index, spans); }
+    virtual void highlighter_did_set_folding_regions(Vector<Syntax::TextDocumentFoldingRegion> regions) override { m_highlighting_document->set_folding_regions(regions); }
 
 protected:
+    void update_document();
+
     String m_text;
     // The font family, technically speaking.
     String m_font;
@@ -127,6 +151,28 @@ protected:
     unsigned m_font_weight { Gfx::FontWeight::Regular };
     Gfx::TextAlignment m_text_alignment { Gfx::TextAlignment::CenterLeft };
     String m_font_style;
+
+    // Just used to make HighlighterClient work.
+    class Document : public Syntax::Document {
+    public:
+        Document() = default;
+        virtual ~Document() = default;
+
+        virtual Syntax::TextDocumentLine const& line(size_t line_index) const override { return m_lines[line_index]; }
+        virtual Syntax::TextDocumentLine& line(size_t line_index) override { return m_lines[line_index]; }
+        virtual void update_views(Badge<Syntax::TextDocumentLine>) override { }
+
+        void add_line(String const& line) { m_lines.empend(*this, line.bytes_as_string_view()); }
+        void clear() { m_lines.clear(); }
+        ReadonlySpan<Syntax::TextDocumentLine> lines() const { return m_lines.span(); }
+
+    private:
+        Vector<Syntax::TextDocumentLine> m_lines;
+    };
+
+    NonnullRefPtr<Document> m_highlighting_document { make_ref_counted<Document>() };
+    OwnPtr<Syntax::Highlighter> m_highlighter;
+    Optional<Syntax::Language> m_syntax_highlight;
 };
 
 // How to scale an image object.
