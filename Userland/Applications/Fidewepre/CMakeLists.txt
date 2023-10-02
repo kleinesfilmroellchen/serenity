@@ -10,6 +10,7 @@ compile_gml(PresenterSettingsPerformance.gml PresenterSettingsPerformanceGML.cpp
 
 set(SOURCES
     main.cpp
+    PDFPage.cpp
     Presentation.cpp
     PresenterSettings.cpp
     PresenterWidget.cpp
@@ -22,6 +23,6 @@ set(SOURCES
 serenity_app(Fidewepre ICON app-presenter)
 target_link_libraries(Fidewepre PRIVATE
     LibCore LibMain LibGUI LibGfx LibThreading
-    LibFileSystemAccessClient LibImageDecoderClient LibConfig LibIPC
+    LibFileSystemAccessClient LibImageDecoderClient LibConfig LibIPC LibPDF
     LibSyntax LibWeb LibJS LibCMake LibCpp LibMarkdown LibSQL LibShell
 )

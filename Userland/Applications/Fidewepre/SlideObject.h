@@ -50,7 +50,7 @@ public:
     bool is_visible_during_frame([[maybe_unused]] unsigned frame_number) const { return m_frames.is_empty() || m_frames.contains(frame_number); }
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const;
-    ALWAYS_INLINE Gfx::IntRect transformed_bounding_box(Gfx::IntRect clip_rect, Gfx::FloatSize display_scale) const;
+    Gfx::IntRect transformed_bounding_box(Gfx::IntRect clip_rect, Gfx::FloatSize display_scale) const;
 
     void set_rect(Gfx::IntRect rect) { m_rect = rect; }
     Gfx::IntRect rect() const { return m_rect; }
@@ -71,7 +71,7 @@ protected:
     HashTable<unsigned> m_frames {};
     ObjectRole m_role { ObjectRole::Default };
 
-    Atomic<bool> m_invalidated { false };
+    mutable Atomic<bool> m_invalidated { false };
 };
 
 // Objects with a foreground color.
@@ -194,39 +194,7 @@ public:
 
     virtual void paint(Gfx::Painter&, Gfx::FloatSize display_scale) const override;
 
-    void set_image_path(String image_path)
-    {
-        m_image_path = LexicalPath { image_path.to_deprecated_string() };
-
-        auto image_load_action = Threading::BackgroundAction<int>::try_create(
-            [this](auto&) {
-                // FIXME: shouldn't be necessary
-                Core::EventLoop loop;
-                return this->reload_image();
-            },
-            [this](auto) -> ErrorOr<void> {
-                // This should cause us to redraw.
-                m_window->update();
-                return {};
-            },
-            [this](auto error) {
-                if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, error); !text.is_error())
-                    GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
-            });
-
-        if (image_load_action.is_error()) {
-            // Try to load the image synchronously instead.
-            auto result = this->reload_image();
-            if (result.is_error()) {
-                if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, result.error()); !text.is_error())
-                    GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
-                else
-                    dbgln("{}", result.error());
-            }
-        } else {
-            m_image_load_action = image_load_action.release_value();
-        }
-    }
+    void set_image_path(String image_path);
     StringView image_path() const { return m_image_path.string(); }
     void set_scaling(ImageScaling scaling) { m_scaling = scaling; }
     ImageScaling scaling() const { return m_scaling; }

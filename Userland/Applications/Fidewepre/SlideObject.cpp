@@ -6,6 +6,7 @@
  */
 
 #include "SlideObject.h"
+#include "PDFPage.h"
 #include "Presentation.h"
 #include <AK/JsonObject.h>
 #include <AK/LexicalPath.h>
@@ -45,9 +46,11 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
     RefPtr<SlideObject> object;
     if (type == "text"sv)
         object = TRY(try_make_ref_counted<Text>());
-    else if (type == "image"sv) {
+    else if (type == "image"sv)
         object = TRY(try_make_ref_counted<Image>(window, presentation.path()));
-    } else
+    else if (type == "pdf"sv)
+        object = TRY(try_make_ref_counted<PDFPage>(window, presentation.path()));
+    else
         return Error::from_string_view("Unsupported slide object type"sv);
 
     auto assign_property = [&](auto const& key, auto const& value) {
@@ -379,6 +382,40 @@ ErrorOr<int> Image::reload_image()
     m_currently_loaded_image.with_locked([&](auto& image) { image = maybe_decoded.value().frames.first().bitmap; });
     m_invalidated.store(true);
     return 0;
+}
+
+void Image::set_image_path(String image_path)
+{
+    m_image_path = LexicalPath { image_path.to_deprecated_string() };
+
+    auto image_load_action = Threading::BackgroundAction<int>::try_create(
+        [this](auto&) {
+            // FIXME: shouldn't be necessary
+            Core::EventLoop loop;
+            return this->reload_image();
+        },
+        [this](auto) -> ErrorOr<void> {
+            m_invalidated = true;
+            m_window->update();
+            return {};
+        },
+        [this](auto error) {
+            if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, error); !text.is_error())
+                GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
+        });
+
+    if (image_load_action.is_error()) {
+        // Try to load the image synchronously instead.
+        auto result = this->reload_image();
+        if (result.is_error()) {
+            if (auto text = String::formatted("Loading image {} failed: {}", m_image_path, result.error()); !text.is_error())
+                GUI::MessageBox::show_error(m_window, text.release_value().bytes_as_string_view());
+            else
+                dbgln("{}", result.error());
+        }
+    } else {
+        m_image_load_action = image_load_action.release_value();
+    }
 }
 
 void Image::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
