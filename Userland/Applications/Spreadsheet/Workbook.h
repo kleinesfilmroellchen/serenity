@@ -15,13 +15,13 @@ class Workbook {
 public:
     Workbook(Vector<NonnullRefPtr<Sheet>>&& sheets, GUI::Window& parent_window);
 
-    ErrorOr<void, DeprecatedString> open_file(String const& filename, Core::File&);
+    ErrorOr<void, String> open_file(String const& filename, Core::File&);
     ErrorOr<void> write_to_file(String const& filename, Core::File&);
 
-    ErrorOr<bool, DeprecatedString> import_file(String const& filename, Core::File&);
+    ErrorOr<bool, String> import_file(String const& filename, Core::File&);
 
-    DeprecatedString const& current_filename() const { return m_current_filename; }
-    bool set_filename(DeprecatedString const& filename);
+    String const& current_filename() const { return m_current_filename; }
+    bool set_filename(String const& filename);
     bool dirty() { return m_dirty; }
     void set_dirty(bool dirty) { m_dirty = dirty; }
 
@@ -50,7 +50,7 @@ private:
     JS::ExecutionContext m_main_execution_context;
     GUI::Window& m_parent_window;
 
-    DeprecatedString m_current_filename;
+    String m_current_filename;
     bool m_dirty { false };
 };
 

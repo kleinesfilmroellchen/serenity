@@ -23,7 +23,6 @@
 #include <LibGUI/Toolbar.h>
 #include <LibGUI/ToolbarContainer.h>
 #include <LibGfx/Font/FontDatabase.h>
-#include <string.h>
 
 namespace Spreadsheet {
 
@@ -99,7 +98,7 @@ SpreadsheetWidget::SpreadsheetWidget(GUI::Window& parent_window, Vector<NonnullR
         auto* sheet_ptr = m_tab_context_menu_sheet_view->sheet_if_available();
         VERIFY(sheet_ptr); // How did we get here without a sheet?
         auto& sheet = *sheet_ptr;
-        String new_name = String::from_deprecated_string(sheet.name()).release_value_but_fixme_should_propagate_errors();
+        String new_name = sheet.name();
         if (GUI::InputBox::show(window(), new_name, {}, "Rename Sheet"sv, GUI::InputType::NonemptyText, "Name"sv) == GUI::Dialog::ExecResult::OK) {
             sheet.set_name(new_name);
             sheet.update();
@@ -159,15 +158,15 @@ SpreadsheetWidget::SpreadsheetWidget(GUI::Window& parent_window, Vector<NonnullR
             return;
         }
 
-        auto response = FileSystemAccessClient::Client::the().request_file(window(), current_filename(), Core::File::OpenMode::Write);
+        auto response = FileSystemAccessClient::Client::the().request_file(window(), current_filename().to_deprecated_string(), Core::File::OpenMode::Write);
         if (response.is_error())
             return;
         save(response.value().filename(), response.value().stream());
     });
 
     m_save_as_action = GUI::CommonActions::make_save_as_action([&](auto&) {
-        DeprecatedString name = "workbook";
-        auto response = FileSystemAccessClient::Client::the().save_file(window(), name, "sheets");
+        String name = "workbook"_string;
+        auto response = FileSystemAccessClient::Client::the().save_file(window(), name.to_deprecated_string(), "sheets");
         if (response.is_error())
             return;
         save(response.value().filename(), response.value().stream());
@@ -216,8 +215,15 @@ SpreadsheetWidget::SpreadsheetWidget(GUI::Window& parent_window, Vector<NonnullR
             auto cell_changes = sheet.copy_cells(move(source_positions), move(target_positions), first_position, action == "cut" ? Spreadsheet::Sheet::CopyOperation::Cut : Spreadsheet::Sheet::CopyOperation::Copy);
             undo_stack().push(make<CellsUndoCommand>(cell_changes));
         } else {
+            auto maybe_string = String::from_utf8(data.data);
+            if (maybe_string.is_error()) {
+                dbgln("Invalid pasted string: {}", maybe_string.release_error());
+                return;
+            }
+            auto string = maybe_string.release_value();
+
             for (auto& cell : sheet.selected_cells())
-                sheet.ensure(cell).set_data(StringView { data.data.data(), data.data.size() });
+                sheet.ensure(cell).set_data(string);
             update();
         }
     },
@@ -228,7 +234,7 @@ SpreadsheetWidget::SpreadsheetWidget(GUI::Window& parent_window, Vector<NonnullR
         if (emoji_input_dialog->exec() != GUI::EmojiInputDialog::ExecResult::OK)
             return;
 
-        auto emoji_code_point = emoji_input_dialog->selected_emoji_text();
+        auto emoji_code_point = MUST(String::from_deprecated_string(emoji_input_dialog->selected_emoji_text()));
 
         if (m_cell_value_editor->has_focus_within()) {
             m_cell_value_editor->insert_at_cursor_or_replace_selection(emoji_code_point);
@@ -345,7 +351,7 @@ void SpreadsheetWidget::clipboard_content_did_change(DeprecatedString const& mim
 void SpreadsheetWidget::setup_tabs(Vector<NonnullRefPtr<Sheet>> new_sheets)
 {
     for (auto& sheet : new_sheets) {
-        auto& new_view = m_tab_widget->add_tab<SpreadsheetView>(String::from_deprecated_string(sheet->name()).release_value_but_fixme_should_propagate_errors(), sheet);
+        auto& new_view = m_tab_widget->add_tab<SpreadsheetView>(sheet->name(), sheet);
         new_view.model()->on_cell_data_change = [&](auto& cell, auto& previous_data) {
             undo_stack().push(make<CellsUndoCommand>(cell, previous_data));
             window()->set_modified(true);
@@ -372,13 +378,13 @@ void SpreadsheetWidget::setup_tabs(Vector<NonnullRefPtr<Sheet>> new_sheets)
 
             if (selection.size() == 1) {
                 auto& position = selection.first();
-                m_current_cell_label->set_text(String::from_deprecated_string(position.to_cell_identifier(sheet)).release_value_but_fixme_should_propagate_errors());
+                m_current_cell_label->set_text(position.to_cell_identifier(sheet));
 
                 auto& cell = sheet.ensure(position);
                 m_cell_value_editor->on_change = nullptr;
                 m_cell_value_editor->set_text(cell.source());
                 m_cell_value_editor->on_change = [&] {
-                    auto text = m_cell_value_editor->text();
+                    auto text = MUST(String::from_deprecated_string(m_cell_value_editor->text()));
                     // FIXME: Lines?
                     auto offset = m_cell_value_editor->cursor().column();
                     try_generate_tip_for_input_expression(text, offset);
@@ -411,7 +417,7 @@ void SpreadsheetWidget::setup_tabs(Vector<NonnullRefPtr<Sheet>> new_sheets)
                     if (!sheet_ptr)
                         return;
                     auto& sheet = *sheet_ptr;
-                    auto text = m_cell_value_editor->text();
+                    auto text = MUST(String::from_deprecated_string(m_cell_value_editor->text()));
                     // FIXME: Lines?
                     auto offset = m_cell_value_editor->cursor().column();
                     try_generate_tip_for_input_expression(text, offset);
@@ -467,7 +473,7 @@ void SpreadsheetWidget::try_generate_tip_for_input_expression(StringView source,
     if (text.is_empty()) {
         m_inline_documentation_window->hide();
     } else {
-        m_inline_documentation_label->set_text(String::from_deprecated_string(text).release_value_but_fixme_should_propagate_errors());
+        m_inline_documentation_label->set_text(text);
         m_inline_documentation_window->show();
     }
 }
@@ -564,7 +570,7 @@ void SpreadsheetWidget::save(String const& filename, Core::File& file)
 {
     auto result = m_workbook->write_to_file(filename, file);
     if (result.is_error()) {
-        GUI::MessageBox::show_error(window(), DeprecatedString::formatted("Cannot save file: {}", result.error()));
+        GUI::MessageBox::show_error(window(), MUST(String::formatted("Cannot save file: {}", result.error())));
         return;
     }
     undo_stack().set_current_unmodified();

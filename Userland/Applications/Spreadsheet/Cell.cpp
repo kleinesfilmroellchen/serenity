@@ -12,7 +12,7 @@
 
 namespace Spreadsheet {
 
-void Cell::set_data(DeprecatedString new_data)
+void Cell::set_data(String new_data)
 {
     // If we are a formula, we do not save the beginning '=', if the new_data is "" we can simply change our kind
     if (m_kind == Formula && m_data.is_empty() && new_data.is_empty()) {
@@ -24,7 +24,7 @@ void Cell::set_data(DeprecatedString new_data)
         return;
 
     if (new_data.starts_with('=')) {
-        new_data = new_data.substring(1, new_data.length() - 1);
+        new_data = MUST(String::from_view(new_data.code_points().unicode_substring_view(1)));
         m_kind = Formula;
     } else {
         m_kind = LiteralString;
@@ -43,7 +43,7 @@ void Cell::set_data(JS::Value new_data)
     StringBuilder builder;
 
     builder.append(new_data.to_string_without_side_effects());
-    m_data = builder.to_deprecated_string();
+    m_data = MUST(builder.to_string());
 
     m_evaluated_data = move(new_data);
 }
@@ -79,14 +79,14 @@ CellType const& Cell::type() const
         return *m_type;
 
     if (m_kind == LiteralString) {
-        if (m_data.to_int().has_value())
+        if (m_data.bytes_as_string_view().to_int().has_value())
             return *CellType::get_by_name("Numeric"sv);
     }
 
     return *CellType::get_by_name("Identity"sv);
 }
 
-JS::ThrowCompletionOr<DeprecatedString> Cell::typed_display() const
+JS::ThrowCompletionOr<String> Cell::typed_display() const
 {
     return type().display(const_cast<Cell&>(*this), m_type_metadata);
 }
@@ -163,13 +163,13 @@ JS::Value Cell::js_data()
     return JS::PrimitiveString::create(vm, m_data);
 }
 
-DeprecatedString Cell::source() const
+String Cell::source() const
 {
     StringBuilder builder;
     if (m_kind == Formula)
         builder.append('=');
     builder.append(m_data);
-    return builder.to_deprecated_string();
+    return MUST(builder.to_string());
 }
 
 // FIXME: Find a better way to figure out dependencies

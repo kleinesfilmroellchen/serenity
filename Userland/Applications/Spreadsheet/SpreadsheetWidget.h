@@ -29,7 +29,7 @@ public:
     void add_sheet();
     void add_sheet(NonnullRefPtr<Sheet>&&);
 
-    DeprecatedString const& current_filename() const { return m_workbook->current_filename(); }
+    String const& current_filename() const { return m_workbook->current_filename(); }
     SpreadsheetView* current_view() { return static_cast<SpreadsheetView*>(m_tab_widget->active_widget()); }
     Sheet* current_worksheet_if_available() { return current_view() ? current_view()->sheet_if_available() : nullptr; }
     void update_window_title();
