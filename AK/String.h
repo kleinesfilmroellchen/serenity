@@ -69,6 +69,7 @@ public:
     template<typename T>
     requires(IsOneOf<RemoveCVReference<T>, DeprecatedString, DeprecatedFlyString>)
     static ErrorOr<String> from_utf8(T&&) = delete;
+    static ErrorOr<String> from_view(Utf8View view);
 
     // Creates a new String by reading byte_count bytes from a UTF-8 encoded Stream.
     static ErrorOr<String> from_stream(Stream&, size_t byte_count);

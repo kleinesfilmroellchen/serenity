@@ -230,17 +230,23 @@ void String::destroy_string()
 
 ErrorOr<String> String::from_utf8(StringView view)
 {
-    if (!Utf8View { view }.validate())
+    Utf8View utf8_view { view };
+    if (!utf8_view.validate())
         return Error::from_string_literal("String::from_utf8: Input was not valid UTF-8");
+    return from_view(utf8_view);
+}
 
-    if (view.length() <= MAX_SHORT_STRING_BYTE_COUNT) {
+ErrorOr<String> String::from_view(Utf8View view)
+{
+    auto const length = view.byte_length();
+    if (length <= MAX_SHORT_STRING_BYTE_COUNT) {
         ShortString short_string;
         if (!view.is_empty())
-            memcpy(short_string.storage, view.characters_without_null_termination(), view.length());
-        short_string.byte_count_and_short_string_flag = (view.length() << 1) | SHORT_STRING_FLAG;
+            memcpy(short_string.storage, view.bytes(), length);
+        short_string.byte_count_and_short_string_flag = (length << 1) | SHORT_STRING_FLAG;
         return String { short_string };
     }
-    auto data = TRY(Detail::StringData::from_utf8(view.characters_without_null_termination(), view.length()));
+    auto data = TRY(Detail::StringData::from_utf8(bit_cast<char const*>(view.bytes()), length));
     return String { move(data) };
 }
 
