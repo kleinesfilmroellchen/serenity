@@ -90,7 +90,7 @@ void Parser::consume_whitespace()
     while (consumed) {
         consumed = lexer.consume_while(is_ascii_space).length() > 0;
 
-        if (lexer.consume_specific("//")) {
+        if (lexer.consume_specific("//"sv)) {
             lexer.consume_until('\n');
             lexer.ignore();
             consumed = true;
@@ -178,7 +178,7 @@ NonnullRefPtr<Type const> Parser::parse_type()
         union_member_types.append(parse_type());
         consume_whitespace();
 
-        while (lexer.consume_specific("or")) {
+        while (lexer.consume_specific("or"sv)) {
             consume_whitespace();
             union_member_types.append(parse_type());
             consume_whitespace();
@@ -191,12 +191,12 @@ NonnullRefPtr<Type const> Parser::parse_type()
         return adopt_ref(*new UnionType("", nullable, move(union_member_types)));
     }
 
-    bool unsigned_ = lexer.consume_specific("unsigned");
+    bool unsigned_ = lexer.consume_specific("unsigned"sv);
     if (unsigned_)
         consume_whitespace();
 
     // FIXME: Actually treat "unrestricted" and normal floats/doubles differently.
-    if (lexer.consume_specific("unrestricted"))
+    if (lexer.consume_specific("unrestricted"sv))
         consume_whitespace();
 
     auto name = lexer.consume_until([](auto ch) { return !is_ascii_alphanumeric(ch) && ch != '_'; });
@@ -232,15 +232,15 @@ NonnullRefPtr<Type const> Parser::parse_type()
 
 void Parser::parse_attribute(HashMap<DeprecatedString, DeprecatedString>& extended_attributes, Interface& interface)
 {
-    bool inherit = lexer.consume_specific("inherit");
+    bool inherit = lexer.consume_specific("inherit"sv);
     if (inherit)
         consume_whitespace();
 
-    bool readonly = lexer.consume_specific("readonly");
+    bool readonly = lexer.consume_specific("readonly"sv);
     if (readonly)
         consume_whitespace();
 
-    if (lexer.consume_specific("attribute"))
+    if (lexer.consume_specific("attribute"sv))
         consume_whitespace();
 
     auto type = parse_type();
@@ -268,7 +268,7 @@ void Parser::parse_attribute(HashMap<DeprecatedString, DeprecatedString>& extend
 
 void Parser::parse_constant(Interface& interface)
 {
-    lexer.consume_specific("const");
+    lexer.consume_specific("const"sv);
     consume_whitespace();
 
     auto type = parse_type();
@@ -299,7 +299,7 @@ Vector<Parameter> Parser::parse_parameters()
         HashMap<DeprecatedString, DeprecatedString> extended_attributes;
         if (lexer.consume_specific('['))
             extended_attributes = parse_extended_attributes();
-        bool optional = lexer.consume_specific("optional");
+        bool optional = lexer.consume_specific("optional"sv);
         if (optional)
             consume_whitespace();
         if (lexer.consume_specific('[')) {
@@ -341,7 +341,7 @@ Vector<Parameter> Parser::parse_parameters()
 Function Parser::parse_function(HashMap<DeprecatedString, DeprecatedString>& extended_attributes, Interface& interface, IsSpecialOperation is_special_operation)
 {
     bool static_ = false;
-    if (lexer.consume_specific("static")) {
+    if (lexer.consume_specific("static"sv)) {
         static_ = true;
         consume_whitespace();
     }
@@ -733,7 +733,7 @@ void Parser::parse_dictionary(Interface& interface)
         bool required = false;
         HashMap<DeprecatedString, DeprecatedString> extended_attributes;
 
-        if (lexer.consume_specific("required")) {
+        if (lexer.consume_specific("required"sv)) {
             required = true;
             consume_whitespace();
         }
@@ -843,7 +843,7 @@ void Parser::parse_non_interface_entities(bool allow_interface, Interface& inter
             auto current_offset = lexer.tell();
             auto name = lexer.consume_until([](auto ch) { return is_ascii_space(ch); });
             consume_whitespace();
-            if (lexer.consume_specific("includes")) {
+            if (lexer.consume_specific("includes"sv)) {
                 consume_whitespace();
                 auto mixin_name = lexer.consume_until([](auto ch) { return is_ascii_space(ch) || ch == ';'; });
                 interface.included_mixins.ensure(name).set(mixin_name);
@@ -944,7 +944,7 @@ Interface& Parser::parse()
     Vector<Interface&> imports;
     {
         HashTable<DeprecatedString> required_imported_paths;
-        while (lexer.consume_specific("#import")) {
+        while (lexer.consume_specific("#import"sv)) {
             consume_whitespace();
             assert_specific('<');
             auto path = lexer.consume_until('>');
@@ -962,9 +962,9 @@ Interface& Parser::parse()
 
     parse_non_interface_entities(true, interface);
 
-    if (lexer.consume_specific("interface"))
+    if (lexer.consume_specific("interface"sv))
         parse_interface(interface);
-    else if (lexer.consume_specific("namespace"))
+    else if (lexer.consume_specific("namespace"sv))
         parse_namespace(interface);
 
     parse_non_interface_entities(false, interface);

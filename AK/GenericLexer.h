@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Result.h>
+#include <AK/String.h>
 #include <AK/StringView.h>
 
 namespace AK {
@@ -71,6 +72,10 @@ public:
     }
 
     template<typename T>
+#ifndef KERNEL
+    // Pass a DeprecatedString by its StringView instead.
+    requires(!SameAs<T, DeprecatedString>)
+#endif
     constexpr bool consume_specific(T const& next)
     {
         if (!next_is(next))
@@ -85,9 +90,9 @@ public:
     }
 
 #ifndef KERNEL
-    bool consume_specific(DeprecatedString const& next)
+    bool consume_specific(String const& next)
     {
-        return consume_specific(StringView { next });
+        return consume_specific(next.bytes_as_string_view());
     }
 #endif
 
