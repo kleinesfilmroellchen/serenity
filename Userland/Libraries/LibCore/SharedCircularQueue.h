@@ -50,7 +50,6 @@ public:
     using ValueType = T;
 
     enum class QueueStatus : u8 {
-        Invalid = 0,
         Full,
         Empty,
     };

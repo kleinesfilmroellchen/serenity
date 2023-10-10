@@ -67,10 +67,10 @@ void ClientAudioStream::set_buffer(NonnullOwnPtr<Audio::AudioQueue> buffer)
 
 void ClientAudioStream::clear()
 {
-    ErrorOr<Array<Audio::Sample, Audio::AUDIO_BUFFER_SIZE>, Audio::AudioQueue::QueueStatus> result = Audio::AudioQueue::QueueStatus::Invalid;
+    ErrorOr<Array<Audio::Sample, Audio::AUDIO_BUFFER_SIZE>, Audio::AudioQueue::QueueStatus> result = Audio::AudioQueue::QueueStatus::Empty;
     do {
         result = m_buffer->dequeue();
-    } while (!result.is_error() || result.error() != Audio::AudioQueue::QueueStatus::Empty);
+    } while (!result.is_error());
 }
 
 void ClientAudioStream::set_paused(bool paused)

@@ -52,7 +52,7 @@ TEST_CASE(simple_multithread)
     auto second_thread = Threading::Thread::construct([&queue]() {
         auto copied_queue = queue;
         for (int i = 0; i < test_count; ++i) {
-            QueueError result = TestQueue::QueueStatus::Invalid;
+            QueueError result = TestQueue::QueueStatus::Empty;
             do {
                 result = copied_queue.dequeue();
                 if (!result.is_error())
@@ -83,7 +83,7 @@ TEST_CASE(producer_consumer_multithread)
         auto copied_queue = queue;
         other_thread_running.store(true);
         for (size_t i = 0; i < test_count; ++i) {
-            QueueError result = TestQueue::QueueStatus::Invalid;
+            QueueError result = TestQueue::QueueStatus::Empty;
             do {
                 result = copied_queue.dequeue();
                 if (!result.is_error())
@@ -101,7 +101,7 @@ TEST_CASE(producer_consumer_multithread)
         ;
 
     for (size_t i = 0; i < test_count; ++i) {
-        ErrorOr<void, TestQueue::QueueStatus> result = TestQueue::QueueStatus::Invalid;
+        ErrorOr<void, TestQueue::QueueStatus> result = TestQueue::QueueStatus::Full;
         do {
             result = queue.enqueue((int)i);
         } while (result.is_error() && result.error() == TestQueue::QueueStatus::Full);
@@ -160,7 +160,7 @@ TEST_CASE(single_producer_multi_consumer)
         thread->start();
 
     for (size_t i = 0; i < test_count; ++i) {
-        ErrorOr<void, TestQueue::QueueStatus> result = TestQueue::QueueStatus::Invalid;
+        ErrorOr<void, TestQueue::QueueStatus> result = TestQueue::QueueStatus::Full;
         do {
             result = queue.enqueue((int)i);
             // After we put something in the first time, let's wait while nobody has dequeued yet.
@@ -186,7 +186,7 @@ Function<intptr_t()> dequeuer(TestQueue& queue, Atomic<size_t>& dequeue_count, s
     return [&queue, &dequeue_count, test_count]() {
         auto copied_queue = queue;
         for (size_t i = 0; i < test_count / 4; ++i) {
-            QueueError result = TestQueue::QueueStatus::Invalid;
+            QueueError result = TestQueue::QueueStatus::Full;
             do {
                 result = copied_queue.dequeue();
                 if (!result.is_error())
