@@ -14,6 +14,8 @@
 #include <AK/RefCounted.h>
 #include <AK/WeakPtr.h>
 #include <LibAudio/Queue.h>
+#include <LibAudio/Sample.h>
+#include <LibDSP/Resampler.h>
 
 namespace AudioServer {
 
@@ -48,9 +50,16 @@ public:
     void set_sample_rate(u32 sample_rate);
 
 private:
+    // Use less than the recommended taps so that we have less taps than the input size.
+    using Resampler = DSP::InterpolatedSincResampler<Audio::Sample, DSP::recommended_float_sinc_taps, DSP::recommended_float_oversample>;
+
+    ErrorOr<void> ensure_resampler(u32 audiodevice_sample_rate);
+    ErrorOr<void, ClientAudioStream::ErrorState> resample_into_current_chunk(ReadonlySpan<Audio::Sample> new_buffer, u32 audiodevice_sample_rate);
+
     OwnPtr<Audio::AudioQueue> m_buffer;
-    Vector<Audio::Sample> m_current_audio_chunk;
+    Vector<Audio::Sample, Audio::AUDIO_BUFFER_SIZE> m_current_audio_chunk;
     size_t m_in_chunk_location;
+    Optional<Resampler> m_resampler {};
 
     bool m_paused { true };
     bool m_muted { false };

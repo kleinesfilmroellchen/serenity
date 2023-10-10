@@ -42,7 +42,7 @@ NonnullRefPtr<ClientAudioStream> Mixer::create_queue(ConnectionFromClient& clien
     queue->set_sample_rate(audiodevice_get_sample_rate());
     {
         Threading::MutexLocker const locker(m_pending_mutex);
-        m_pending_mixing.append(*queue);
+        m_pending_mixing.append(queue);
     }
     // Signal the mixer thread to start back up, in case nobody was connected before.
     m_mixing_necessary.signal();
