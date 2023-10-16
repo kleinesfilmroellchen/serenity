@@ -14,10 +14,10 @@
 #include <AK/Types.h>
 #include <LibCore/MappedFile.h>
 #include <LibDebug/DebugInfo.h>
+#include <LibDisassembly/Instruction.h>
 #include <LibELF/AuxiliaryVector.h>
 #include <LibELF/Image.h>
 #include <LibLine/Editor.h>
-#include <LibX86/Instruction.h>
 #include <signal.h>
 #include <sys/types.h>
 
@@ -256,7 +256,7 @@ private:
     MmapRegion const* load_library_from_address(FlatPtr address);
     MmapRegion const* first_region_for_object(StringView name);
     DeprecatedString create_backtrace_line(FlatPtr address);
-    DeprecatedString create_instruction_line(FlatPtr address, X86::Instruction const& insn);
+    DeprecatedString create_instruction_line(FlatPtr address, Disassembly::X86::Instruction const& insn);
 
     bool m_shutdown { false };
     int m_exit_status { 0 };

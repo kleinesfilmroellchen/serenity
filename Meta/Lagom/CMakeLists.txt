@@ -464,7 +464,7 @@ if (BUILD_LAGOM)
         lagom_lib(LibELF elf
             SOURCES ${LIBELF_SOURCES}
         )
-        list(APPEND lagom_standard_libraries X86)
+        list(APPEND lagom_standard_libraries Disassembly)
     endif()
 
     foreach(lib IN LISTS lagom_standard_libraries)
@@ -517,7 +517,7 @@ if (BUILD_LAGOM)
         #        for Lagom on Apple M1
         if (NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64" AND NOT EMSCRIPTEN)
             add_executable(disasm ../../Userland/Utilities/disasm.cpp)
-            target_link_libraries(disasm LibCore LibELF LibX86 LibMain)
+            target_link_libraries(disasm LibCore LibELF LibDisassembly LibMain)
         endif()
 
         if (NOT EMSCRIPTEN)
