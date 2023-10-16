@@ -131,7 +131,7 @@ ErrorOr<int> serenity_main(Main::Arguments args)
             is_first_symbol = false;
         }
 
-        size_t length = insn.value().length();
+        size_t length = insn.value()->length();
         StringBuilder builder;
         builder.appendff("{:p}  ", virtual_offset);
         for (size_t i = 0; i < 7; i++) {
@@ -141,7 +141,7 @@ ErrorOr<int> serenity_main(Main::Arguments args)
                 builder.append("   "sv);
         }
         builder.append(" "sv);
-        builder.append(insn.value().to_deprecated_string(virtual_offset, *symbol_provider));
+        builder.append(insn.value()->to_deprecated_string(virtual_offset, *symbol_provider));
         outln("{}", builder.string_view());
 
         for (size_t bytes_printed = 7; bytes_printed < length; bytes_printed += 7) {
