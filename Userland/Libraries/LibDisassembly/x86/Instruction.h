@@ -11,6 +11,7 @@
 #include <AK/Optional.h>
 #include <AK/StdLibExtras.h>
 #include <AK/Types.h>
+#include <LibDisassembly/Instruction.h>
 #include <LibDisassembly/SymbolProvider.h>
 #include <stdio.h>
 
@@ -552,11 +553,11 @@ private:
     bool m_has_sib : 1 { false };
 };
 
-class Instruction {
+class Instruction : public Disassembly::Instruction {
 public:
     template<typename InstructionStreamType>
     static Instruction from_stream(InstructionStreamType&, ProcessorMode);
-    ~Instruction() = default;
+    virtual ~Instruction() = default;
 
     ALWAYS_INLINE MemoryOrRegisterReference& modrm() const { return m_modrm; }
 
@@ -578,9 +579,9 @@ public:
 
     bool is_valid() const { return m_descriptor; }
 
-    unsigned length() const;
+    virtual size_t length() const override;
 
-    DeprecatedString mnemonic() const;
+    virtual DeprecatedString mnemonic() const override;
 
     u8 op() const { return m_op; }
     u8 modrm_byte() const { return m_modrm.modrm_byte(); }
@@ -632,13 +633,13 @@ public:
     OperandSize operand_size() const { return m_operand_size; }
     ProcessorMode mode() const { return m_mode; }
 
-    DeprecatedString to_deprecated_string(u32 origin, SymbolProvider const* = nullptr, bool x32 = true) const;
+    virtual DeprecatedString to_deprecated_string(u32 origin, Optional<SymbolProvider const&> = {}) const override;
 
 private:
     template<typename InstructionStreamType>
     Instruction(InstructionStreamType&, ProcessorMode);
 
-    void to_deprecated_string_internal(StringBuilder&, u32 origin, SymbolProvider const*, bool x32) const;
+    void to_deprecated_string_internal(StringBuilder&, u32 origin, Optional<SymbolProvider const&>, bool x32) const;
 
     StringView reg8_name() const;
     StringView reg16_name() const;
@@ -903,9 +904,9 @@ ALWAYS_INLINE Instruction Instruction::from_stream(InstructionStreamType& stream
     return Instruction(stream, mode);
 }
 
-ALWAYS_INLINE unsigned Instruction::length() const
+ALWAYS_INLINE size_t Instruction::length() const
 {
-    unsigned len = 1;
+    size_t len = 1;
     if (has_sub_op())
         ++len;
     if (m_descriptor && m_descriptor->has_rm) {
