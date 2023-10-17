@@ -447,6 +447,10 @@ DeprecatedString Image::symbolicate(FlatPtr address, u32* out_offset) const
         return "??";
     }
 
+    // FIXME: This returns any of the symbols at the address (unpredictably) if there are multiple.
+    //        That case is very common with RISC-V when a code address has both a jump target and a relocation symbol.
+    //        We have no way of distinguishing those in a clean way, or preferring one over the other.
+    //        A possible solution is an extended symbolication API that returns a collection of all symbols.
     auto* symbol = find_sorted_symbol(address);
     if (!symbol) {
         if (out_offset)
