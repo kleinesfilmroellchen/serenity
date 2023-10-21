@@ -629,6 +629,7 @@ if (BUILD_LAGOM)
             JSSpecCompiler
             LibCrypto
             LibCompress
+            LibDisassembly
             LibGL
             LibGfx
             LibIMAP
