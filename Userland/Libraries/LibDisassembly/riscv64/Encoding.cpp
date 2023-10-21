@@ -289,7 +289,7 @@ RawCIType RawCIType::parse(u16 instruction)
             u32 imm_4 = (instruction >> 6) & 1;
             u32 imm_9 = (instruction >> 12) & 1;
             raw_immediate = (imm_4 << 4) | (imm_5 << 5) | (imm_6 << 6) | (imm_8_7 << 7) | (imm_9 << 9);
-            immediate = AK::sign_extend(raw_immediate, 6);
+            immediate = AK::sign_extend(raw_immediate, 9);
         } else {
             u32 imm_16_12 = (instruction >> 2) & 0b11111;
             raw_immediate |= imm_16_12;
@@ -492,6 +492,8 @@ RawCBType RawCBType::parse(u16 instruction)
             immediate = AK::sign_extend(raw_immediate, 6);
             break;
         }
+        default:
+            VERIFY_NOT_REACHED();
         }
     } else {
         // C.BEQZ, C.BNEZ
