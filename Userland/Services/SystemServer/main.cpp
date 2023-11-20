@@ -36,7 +36,7 @@ static constexpr StringView text_system_mode = "text"sv;
 static constexpr StringView selftest_system_mode = "self-test"sv;
 static constexpr StringView graphical_system_mode = "graphical"sv;
 ByteString g_system_mode = graphical_system_mode;
-Vector<NonnullRefPtr<Service>> g_services;
+Vector<NonnullRefPtr<Unit>> g_services;
 
 // NOTE: This handler ensures that the destructor of g_services is called.
 static void sigterm_handler(int)
@@ -207,24 +207,64 @@ static ErrorOr<void> create_tmp_semaphore_directory()
     return {};
 }
 
+static Optional<Target&> find_target_for(StringView target_name)
+{
+    for (auto& unit : g_services) {
+        if (is<Target>(*unit)) {
+            auto target = static_ptr_cast<Target>(unit);
+            if (target->name() == target_name)
+                return *target;
+        }
+    }
+    return {};
+}
+
+static ErrorOr<void> activate_target(Target& target)
+{
+    // By checking and marking a target as started immediately, circular dependencies will not hang SystemServer.
+    // However, they may cause weird behavior since one target *needs* to be started first
+    // (and this may not be predictable to the user).
+    if (target.has_been_activated()) {
+        dbgln_if(SYSTEMSERVER_DEBUG, "Skipping target {} as it is already started.", target.name());
+        return {};
+    }
+    target.set_start_in_progress();
+
+    // First start all target dependencies.
+    auto dependencies = target.depends_on();
+    for (auto& dependency_target_name : dependencies) {
+        auto dependency = find_target_for(dependency_target_name);
+        // FIXME: What to do if the target doesn't exist?
+        TRY(activate_target(dependency.value()));
+    }
+
+    dbgln("Activating services for target {}...", target.name());
+    for (auto& unit : g_services) {
+        if (is<Service>(*unit)) {
+            auto service = static_ptr_cast<Service>(unit);
+            if (service->is_required_for_target(target.name()) && !service->has_been_activated()) {
+                dbgln_if(SYSTEMSERVER_DEBUG, "Activating {}", service->name());
+                TRY(service->setup_sockets());
+                if (auto result = service->activate(); result.is_error())
+                    dbgln("{}: {}", service->name(), result.release_error());
+            }
+        }
+    }
+
+    target.set_reached();
+    dbgln("Reached target {}.", target.name());
+    return {};
+}
+
 static ErrorOr<void> activate_services(Core::ConfigFile const& config)
 {
     for (auto const& name : config.groups()) {
         auto service = TRY(Service::try_create(config, name));
-        if (service->is_required_for_target(g_system_mode)) {
-            TRY(service->setup_sockets());
-            g_services.append(move(service));
-        }
+        g_services.append(move(service));
     }
-    // After we've set them all up, activate them!
-    dbgln("Activating {} services...", g_services.size());
-    for (auto& service : g_services) {
-        dbgln_if(SYSTEMSERVER_DEBUG, "Activating {}", service->name());
-        if (auto result = service->activate(); result.is_error())
-            dbgln("{}: {}", service->name(), result.release_error());
-    }
-
-    return {};
+    // This will intentionally crash if the system mode has no associated target.
+    auto& target = find_target_for(g_system_mode).value();
+    return activate_target(target);
 }
 
 static ErrorOr<void> reopen_base_file_descriptors()

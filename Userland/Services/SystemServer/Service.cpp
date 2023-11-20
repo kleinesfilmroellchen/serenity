@@ -113,13 +113,18 @@ ErrorOr<void> Service::handle_socket_connection()
 
 ErrorOr<void> Service::activate()
 {
-    VERIFY(m_pid < 0);
+    VERIFY(!has_been_activated());
 
     if (m_lazy)
         setup_notifier();
     else
         TRY(spawn());
     return {};
+}
+
+bool Service::has_been_activated() const
+{
+    return m_pid > 0;
 }
 
 ErrorOr<void> Service::change_privileges()
@@ -282,85 +287,123 @@ ErrorOr<void> Service::did_exit(int status)
     return {};
 }
 
-Service::Service(Core::ConfigFile const& config, StringView name)
-    : Core::EventReceiver(nullptr)
+Service::Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, bool lazy, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets, bool multi_instance, bool accept_socket_connections)
+    : m_executable_path(move(executable_path))
+    , m_extra_arguments(move(extra_arguments))
+    , m_priority(priority)
+    , m_keep_alive(keep_alive)
+    , m_accept_socket_connections(accept_socket_connections)
+    , m_lazy(lazy)
+    , m_targets(move(targets))
+    , m_multi_instance(multi_instance)
+    , m_environment(move(environment))
 {
-    VERIFY(config.has_group(name));
-
     set_name(name);
-    m_executable_path = config.read_entry(name, "Executable", ByteString::formatted("/bin/{}", this->name()));
-    m_extra_arguments = config.read_entry(name, "Arguments");
-    m_stdio_file_path = config.read_entry_optional(name, "StdIO");
-
-    auto prio = config.read_entry_optional(name, "Priority");
-    if (prio == "low")
-        m_priority = 10;
-    else if (prio == "normal" || !prio.has_value())
-        m_priority = 30;
-    else if (prio == "high")
-        m_priority = 50;
-    else
-        VERIFY_NOT_REACHED();
-
-    m_keep_alive = config.read_bool_entry(name, "KeepAlive");
-    m_lazy = config.read_bool_entry(name, "Lazy");
-
-    m_user = config.read_entry_optional(name, "User");
-    if (m_user.has_value()) {
-        auto result = Core::Account::from_name(*m_user, Core::Account::Read::PasswdOnly);
-        if (result.is_error()) {
-            warnln("Failed to resolve user {}: {}", m_user, result.error());
-        } else {
-            m_must_login = true;
-            m_account = result.value();
-        }
-    }
-
-    m_working_directory = config.read_entry_optional(name, "WorkingDirectory");
-    m_environment = config.read_entry(name, "Environment");
-    m_targets = config.read_entry(name, "Targets", "graphical").split(',');
-    m_multi_instance = config.read_bool_entry(name, "MultiInstance");
-    m_accept_socket_connections = config.read_bool_entry(name, "AcceptSocketConnections");
-
-    ByteString socket_entry = config.read_entry(name, "Socket");
-    ByteString socket_permissions_entry = config.read_entry(name, "SocketPermissions", "0600");
-
-    if (!socket_entry.is_empty()) {
-        Vector<ByteString> socket_paths = socket_entry.split(',');
-        Vector<ByteString> socket_perms = socket_permissions_entry.split(',');
-        m_sockets.ensure_capacity(socket_paths.size());
-
-        // Need i here to iterate along with all other vectors.
-        for (unsigned i = 0; i < socket_paths.size(); i++) {
-            auto const path = Core::SessionManagement::parse_path_with_sid(socket_paths.at(i));
-            if (path.is_error()) {
-                // FIXME: better error handling for this case.
-                TODO();
-            }
-
-            // Socket path (plus NUL) must fit into the structs sent to the Kernel.
-            VERIFY(path.value().length() < UNIX_PATH_MAX);
-
-            // This is done so that the last permission repeats for every other
-            // socket. So you can define a single permission, and have it
-            // be applied for every socket.
-            mode_t permissions = strtol(socket_perms.at(min(socket_perms.size() - 1, (long unsigned)i)).characters(), nullptr, 8) & 0777;
-
-            m_sockets.empend(path.value(), -1, permissions);
-        }
-    }
-
-    // Lazy requires Socket, but only one.
-    VERIFY(!m_lazy || m_sockets.size() == 1);
-    // AcceptSocketConnections always requires Socket (single), Lazy, and MultiInstance.
-    VERIFY(!m_accept_socket_connections || (m_sockets.size() == 1 && m_lazy && m_multi_instance));
-    // MultiInstance doesn't work with KeepAlive.
-    VERIFY(!m_multi_instance || !m_keep_alive);
 }
 
-ErrorOr<NonnullRefPtr<Service>> Service::try_create(Core::ConfigFile const& config, StringView name)
+void Service::set_user(Badge<Unit>, ByteString user)
 {
-    return TRY(adopt_nonnull_ref_or_enomem(new (nothrow) Service(config, name)));
+    m_user = move(user);
+    auto result = Core::Account::from_name(*m_user, Core::Account::Read::PasswdOnly);
+    if (result.is_error()) {
+        warnln("Failed to resolve user {}: {}", m_user, result.error());
+    } else {
+        m_must_login = true;
+        m_account = result.value();
+    }
+}
+
+ErrorOr<NonnullRefPtr<Unit>> Unit::try_create(Core::ConfigFile const& config, StringView name)
+{
+    if (!config.has_group(name))
+        return Error::from_string_view("Unit's config file group not found"sv);
+
+    auto type = config.read_entry(name, "Type", "Service");
+
+    if (type == "Target") {
+        auto is_system_mode = config.read_bool_entry(name, "IsSystemMode");
+        auto depends_on = config.read_entry(name, "DependsOn").split(',');
+        return adopt_nonnull_ref_or_enomem(new (nothrow) Target({}, name, is_system_mode, depends_on));
+    } else if (type == "Service") {
+        auto executable_path = config.read_entry(name, "Executable", ByteString::formatted("/bin/{}", name));
+        auto extra_arguments = config.read_entry(name, "Arguments");
+        auto lazy = config.read_bool_entry(name, "Lazy");
+        auto keep_alive = config.read_bool_entry(name, "KeepAlive");
+        auto environment = config.read_entry(name, "Environment");
+        auto targets = config.read_entry(name, "Targets", "graphical").split(',');
+        auto multi_instance = config.read_bool_entry(name, "MultiInstance");
+        auto accept_socket_connections = config.read_bool_entry(name, "AcceptSocketConnections");
+
+        auto priority_string = config.read_entry_optional(name, "Priority");
+        int priority;
+        if (priority_string == "low")
+            priority = 10;
+        else if (priority_string == "normal" || !priority_string.has_value())
+            priority = 30;
+        else if (priority_string == "high")
+            priority = 50;
+        else
+            return Error::from_string_view("Priority must be either low, normal, or high"sv);
+
+        auto service = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) Service({}, name, executable_path, extra_arguments, lazy, priority, keep_alive, environment, targets, multi_instance, accept_socket_connections)));
+
+        auto stdio_file_path = config.read_entry_optional(name, "StdIO");
+        if (stdio_file_path.has_value())
+            service->set_stdio_file_path({}, stdio_file_path.release_value());
+
+        auto user = config.read_entry_optional(name, "User");
+        if (user.has_value())
+            service->set_user({}, user.release_value());
+
+        auto working_directory = config.read_entry_optional(name, "WorkingDirectory");
+        if (working_directory.has_value())
+            service->set_working_directory({}, working_directory.release_value());
+
+        ByteString socket_entry = config.read_entry(name, "Socket");
+        ByteString socket_permissions_entry = config.read_entry(name, "SocketPermissions", "0600");
+
+        Vector<SocketDescriptor> sockets;
+        if (!socket_entry.is_empty()) {
+            Vector<ByteString> socket_paths = socket_entry.split(',');
+            Vector<ByteString> socket_perms = socket_permissions_entry.split(',');
+            sockets.ensure_capacity(socket_paths.size());
+
+            // Need i here to iterate along with all other vectors.
+            for (unsigned i = 0; i < socket_paths.size(); i++) {
+                auto const path = Core::SessionManagement::parse_path_with_sid(socket_paths.at(i));
+                if (path.is_error()) {
+                    // FIXME: better error handling for this case.
+                    TODO();
+                }
+
+                // Socket path (plus NUL) must fit into the structs sent to the Kernel.
+                VERIFY(path.value().length() < UNIX_PATH_MAX);
+
+                // This is done so that the last permission repeats for every other
+                // socket. So you can define a single permission, and have it
+                // be applied for every socket.
+                mode_t permissions = strtol(socket_perms.at(min(socket_perms.size() - 1, (long unsigned)i)).characters(), nullptr, 8) & 0777;
+
+                sockets.empend(path.value(), -1, permissions);
+            }
+        }
+
+        if (lazy && sockets.size() != 1)
+            return Error::from_string_view("Lazy requires Socket, but only one."sv);
+
+        if (accept_socket_connections && (sockets.size() != 1 || !lazy || !multi_instance))
+            return Error::from_string_view("AcceptSocketConnections always requires Socket (single), Lazy, and MultiInstance."sv);
+
+        if (multi_instance && keep_alive)
+            return Error::from_string_view("MultiInstance doesn't work with KeepAlive."sv);
+
+        service->set_sockets({}, move(sockets));
+
+        return service;
+
+    } else {
+        return Error::from_string_view("Unsupported unit type"sv);
+    }
 }
 
 bool Service::is_required_for_target(StringView target_name) const
@@ -384,4 +427,9 @@ Service::~Service()
         if (auto rc = remove(socket.path.characters()); rc != 0)
             dbgln("{}", Error::from_errno(errno));
     }
+}
+
+bool Target::has_been_activated() const
+{
+    return m_state != State::Inactive;
 }
