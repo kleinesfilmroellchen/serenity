@@ -20,7 +20,7 @@ public:
     static ErrorOr<NonnullRefPtr<Service>> try_create(Core::ConfigFile const& config, StringView name);
     ~Service();
 
-    bool is_enabled_for_system_mode(StringView) const;
+    bool is_required_for_target(StringView target_name) const;
     ErrorOr<void> activate();
     // Note: This is a `status` as in POSIX's wait syscall, not an exit-code.
     ErrorOr<void> did_exit(int status);
@@ -68,8 +68,8 @@ private:
     Optional<ByteString> m_user;
     // The working directory in which to spawn the service.
     Optional<ByteString> m_working_directory;
-    // System modes in which to run this service. By default, this is the graphical mode.
-    Vector<ByteString> m_system_modes;
+    // Targets in which to run this service.
+    Vector<ByteString> m_targets;
     // Whether several instances of this service can run at once.
     bool m_multi_instance { false };
     // Environment variables to pass to the service.

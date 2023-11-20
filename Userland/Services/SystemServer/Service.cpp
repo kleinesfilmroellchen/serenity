@@ -318,7 +318,7 @@ Service::Service(Core::ConfigFile const& config, StringView name)
 
     m_working_directory = config.read_entry_optional(name, "WorkingDirectory");
     m_environment = config.read_entry(name, "Environment");
-    m_system_modes = config.read_entry(name, "SystemModes", "graphical").split(',');
+    m_targets = config.read_entry(name, "Targets", "graphical").split(',');
     m_multi_instance = config.read_bool_entry(name, "MultiInstance");
     m_accept_socket_connections = config.read_bool_entry(name, "AcceptSocketConnections");
 
@@ -363,9 +363,9 @@ ErrorOr<NonnullRefPtr<Service>> Service::try_create(Core::ConfigFile const& conf
     return TRY(adopt_nonnull_ref_or_enomem(new (nothrow) Service(config, name)));
 }
 
-bool Service::is_enabled_for_system_mode(StringView mode) const
+bool Service::is_required_for_target(StringView target_name) const
 {
-    return m_system_modes.contains_slow(mode);
+    return m_targets.contains_slow(target_name);
 }
 
 ErrorOr<void> Service::determine_account(int fd)

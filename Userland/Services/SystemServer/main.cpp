@@ -211,7 +211,7 @@ static ErrorOr<void> activate_services(Core::ConfigFile const& config)
 {
     for (auto const& name : config.groups()) {
         auto service = TRY(Service::try_create(config, name));
-        if (service->is_enabled_for_system_mode(g_system_mode)) {
+        if (service->is_required_for_target(g_system_mode)) {
             TRY(service->setup_sockets());
             g_services.append(move(service));
         }
