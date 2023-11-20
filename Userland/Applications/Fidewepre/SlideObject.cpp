@@ -209,7 +209,7 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
         auto spans = m_highlighting_document->spans();
 
         for (size_t line_index = 0; line_index < m_highlighting_document->lines().size(); ++line_index) {
-            auto const line = MUST(String::from_deprecated_string(m_highlighting_document->lines()[line_index].to_utf8()));
+            auto const line = m_highlighting_document->lines()[line_index].view();
             Gfx::FloatPoint const line_position = scaled_bounding_box.top_left().to_type<float>().moved_down(static_cast<float>(line_index) * line_height);
             // This is a simplified copy of the text editor syntax highlighting code (no collapsed range handling or wrapping).
             size_t next_column = 0;
@@ -218,12 +218,12 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
                 size_t length = end - start;
                 if (length == 0)
                     return;
-                auto text = line.code_points().unicode_substring_view(start, length);
+                auto text = line.substring_view(start, length);
                 span_rect.set_width(draw_font.width(text) + draw_font.glyph_spacing());
                 if (text_attributes.background_color.has_value()) {
                     painter.fill_rect(span_rect.to_type<int>(), text_attributes.background_color.value());
                 }
-                draw_text(span_rect, text.as_string(), draw_font, text_attributes);
+                draw_text(span_rect, text, draw_font, text_attributes);
                 span_rect.translate_by(span_rect.width(), 0);
             };
 
@@ -246,8 +246,8 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
                 }
                 size_t span_end;
                 bool span_consumed;
-                if (span.range.end().line() > line_index || span.range.end().column() > line.code_points().length()) {
-                    span_end = line.code_points().length();
+                if (span.range.end().line() > line_index || span.range.end().column() > line.length()) {
+                    span_end = line.length();
                     span_consumed = false;
                 } else {
                     span_end = span.range.end().column();
@@ -269,8 +269,8 @@ void Text::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
                 }
             }
             // draw unspanned text after last span
-            if (next_column < line.code_points().length()) {
-                draw_text_helper(next_column, line.code_points().length(), *font, unspanned_text_attributes);
+            if (next_column < line.length()) {
+                draw_text_helper(next_column, line.length(), *font, unspanned_text_attributes);
             }
         }
 
