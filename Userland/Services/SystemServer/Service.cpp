@@ -429,3 +429,12 @@ bool Target::has_been_activated() const
 {
     return m_state != State::Inactive;
 }
+
+ErrorOr<NonnullRefPtr<Target>> Target::create_special_target(SpecialTargetKind kind)
+{
+    switch (kind) {
+    case SpecialTargetKind::Shutdown:
+        return adopt_nonnull_ref_or_enomem(new (nothrow) Target("shutdown"sv, false, {}, true));
+    }
+    VERIFY_NOT_REACHED();
+}

@@ -20,6 +20,16 @@ static constexpr StringView graphical_system_mode = "graphical"sv;
 static Singleton<UnitManagement> s_instance;
 UnitManagement& UnitManagement::the() { return s_instance; }
 
+UnitManagement::UnitManagement()
+{
+    populate_special_targets();
+}
+
+void UnitManagement::populate_special_targets()
+{
+    m_units.append(MUST(Target::create_special_target(Target::SpecialTargetKind::Shutdown)));
+}
+
 void UnitManagement::sigchld_handler()
 {
     for (;;) {
@@ -42,6 +52,11 @@ void UnitManagement::sigchld_handler()
         auto service = maybe_service.value();
 
         m_services_by_pid.remove(service->pid());
+
+        // Don't restart services.
+        if (m_in_shutdown)
+            continue;
+
         if (auto result = service->did_exit(status); result.is_error())
             dbgln("{}: {}", service->name(), result.release_error());
     }
@@ -67,8 +82,47 @@ Optional<Target&> UnitManagement::find_target_for(StringView target_name)
     return {};
 }
 
+ErrorOr<void> UnitManagement::handle_special_target(StringView special_target_name)
+{
+    if (special_target_name == "shutdown") {
+        m_in_shutdown = true;
+        dbgln("SerenityOS shutting down...");
+        for (auto const& service : m_services_by_pid) {
+            auto result = Core::System::kill(service.key, SIGTERM);
+            if (result.is_error()) {
+                dbgln("Failed to kill {}: {}", service.key, result.error());
+                // Try harder to be sure.
+                (void)Core::System::kill(service.key, SIGKILL);
+            }
+        }
+
+        size_t waited_count = 0;
+        while (!m_services_by_pid.is_empty() && waited_count < 10) {
+            usleep(1'000'000);
+            waited_count++;
+        }
+
+        dbgln("All processes have exited. Turning off the computer...");
+
+        auto file = TRY(Core::File::open("/sys/kernel/power_state"sv, Core::File::OpenMode::Write));
+        constexpr auto file_contents = "2"sv;
+        TRY(file->write_until_depleted(file_contents.bytes()));
+        file->close();
+        // If we’re not dead yet, let’s just exit.
+        exit(0);
+    }
+    return ENOENT;
+}
+
 ErrorOr<void> UnitManagement::activate_target(Target& target)
 {
+    if (target.is_special()) {
+        // User mode does not support special targets.
+        if (m_server_mode == ServerMode::User)
+            return EPERM;
+        return handle_special_target(target.name());
+    }
+
     // By checking and marking a target as started immediately, circular dependencies will not hang SystemServer.
     // However, they may cause weird behavior since one target *needs* to be started first
     // (and this may not be predictable to the user).
@@ -179,7 +233,7 @@ static ErrorOr<void> wait_for_gpu()
 
 void UnitManagement::wait_for_gpu_if_needed()
 {
-    if (m_system_mode == graphical_system_mode) {
+    if (m_server_mode == ServerMode::System && m_system_mode == graphical_system_mode) {
         auto result = wait_for_gpu();
         if (result.is_error())
             m_system_mode = MUST(String::from_utf8(text_system_mode));

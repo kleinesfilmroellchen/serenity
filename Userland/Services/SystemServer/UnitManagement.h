@@ -11,7 +11,12 @@
 #include <AK/Singleton.h>
 
 class UnitManagement final {
+    AK_MAKE_NONCOPYABLE(UnitManagement);
+    AK_MAKE_NONMOVABLE(UnitManagement);
+
 public:
+    UnitManagement();
+
     static UnitManagement& the();
 
     Optional<NonnullRefPtr<Service>> find_service_by_pid(pid_t pid);
@@ -21,6 +26,7 @@ public:
     void wait_for_gpu_if_needed();
 
     ErrorOr<void> load_config(Core::ConfigFile const&);
+    void set_is_user_mode(bool is_user_mode) { m_server_mode = is_user_mode ? ServerMode::User : ServerMode::System; }
     ErrorOr<void> activate_target(Target& target);
     ErrorOr<void> activate_service(Service& service);
     ErrorOr<void> activate_system_mode_target();
@@ -41,7 +47,18 @@ public:
     }
 
 private:
+    enum class ServerMode : bool {
+        System,
+        User,
+    };
+
+    void populate_special_targets();
+    ErrorOr<void> handle_special_target(StringView special_target_name);
+
     Vector<NonnullRefPtr<Unit>> m_units;
     HashMap<pid_t, NonnullRefPtr<Service>> m_services_by_pid;
     String m_system_mode;
+    ServerMode m_server_mode { ServerMode::System };
+
+    bool m_in_shutdown { false };
 };

@@ -135,10 +135,16 @@ public:
         Reached,
     };
 
+    enum class SpecialTargetKind {
+        Shutdown,
+    };
+    static ErrorOr<NonnullRefPtr<Target>> create_special_target(SpecialTargetKind);
+
     virtual ~Target() = default;
     virtual bool has_been_activated() const override;
 
     bool is_system_mode() const { return m_is_system_mode; }
+    bool is_special() const { return m_is_special; }
     ReadonlySpan<ByteString> depends_on() const { return m_depends_on; }
     State state() const { return m_state; }
 
@@ -154,14 +160,22 @@ public:
     }
 
     Target(Badge<Unit>, StringView name, bool is_system_mode, Vector<ByteString> depends_on)
+        : Target(name, is_system_mode, move(depends_on))
+    {
+    }
+
+private:
+    Target(
+        StringView name, bool is_system_mode, Vector<ByteString> depends_on, bool is_special = false)
         : m_is_system_mode(is_system_mode)
+        , m_is_special(is_special)
         , m_depends_on(move(depends_on))
     {
         set_name(name);
     }
 
-private:
     bool m_is_system_mode;
+    bool m_is_special;
     Vector<ByteString> m_depends_on;
 
     State m_state { State::Inactive };
