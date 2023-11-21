@@ -3,7 +3,7 @@ list(APPEND SPECIAL_TARGETS test install)
 list(APPEND REQUIRED_TARGETS
     arp base64 basename cat chmod chown clear comm cp cut date dd df diff dirname dmesg du echo env expr false
     file find grep groups head host hostname id ifconfig kill killall ln logout ls mkdir mount mv network-settings nproc
-    patch pgrep pidof ping pkill pmap ps readlink realpath reboot rm rmdir sed route seq shutdown sleep sort stat stty su tail test
+    patch pgrep pidof ping pkill pmap ps readlink realpath reboot rm rmdir sed route seq shutdown sleep sort stat stty su ssctl tail test
     touch tr true umount uname uniq uptime w wc which whoami xargs yes
 )
 list(APPEND RECOMMENDED_TARGETS
@@ -148,6 +148,7 @@ target_link_libraries(shred PRIVATE LibFileSystem)
 target_link_libraries(slugify PRIVATE LibUnicode)
 target_link_libraries(sql PRIVATE LibFileSystem LibIPC LibLine LibSQL)
 target_link_libraries(su PRIVATE LibCrypt)
+target_link_libraries(ssctl PRIVATE LibSystemServer LibIPC)
 target_link_libraries(syscall PRIVATE LibSystem)
 target_link_libraries(ttfdisasm PRIVATE LibGfx)
 target_link_libraries(tar PRIVATE LibArchive LibCompress LibFileSystem)
