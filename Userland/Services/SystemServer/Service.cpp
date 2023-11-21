@@ -24,16 +24,6 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-static HashMap<pid_t, Service*> s_service_map;
-
-Service* Service::find_by_pid(pid_t pid)
-{
-    auto it = s_service_map.find(pid);
-    if (it == s_service_map.end())
-        return nullptr;
-    return (*it).value;
-}
-
 ErrorOr<void> Service::setup_socket(SocketDescriptor& socket)
 {
     VERIFY(socket.fd == -1);
@@ -241,7 +231,6 @@ ErrorOr<void> Service::spawn(int socket_fd)
     } else if (!m_multi_instance) {
         // We are the parent.
         m_pid = pid;
-        s_service_map.set(pid, this);
     }
 
     return {};
@@ -259,7 +248,6 @@ ErrorOr<void> Service::did_exit(int status)
     if (WIFSIGNALED(status))
         dbgln("Service {} terminated due to signal {}", name(), WTERMSIG(status));
 
-    s_service_map.remove(m_pid);
     m_pid = -1;
 
     if (!m_keep_alive)

@@ -51,7 +51,8 @@ public:
 
     ErrorOr<void> setup_sockets();
 
-    static Service* find_by_pid(pid_t);
+    // May be -1 if this service has no associated PID.
+    int pid() const { return m_pid; }
 
     // Configuration APIs only used by Unit.
     Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, bool lazy, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets, bool multi_instance, bool accept_socket_connections);

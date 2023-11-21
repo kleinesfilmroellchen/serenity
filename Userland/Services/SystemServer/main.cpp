@@ -7,6 +7,7 @@
  */
 
 #include "Service.h"
+#include "UnitManagement.h"
 #include <AK/Assertions.h>
 #include <AK/ByteBuffer.h>
 #include <AK/Debug.h>
@@ -32,73 +33,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static constexpr StringView text_system_mode = "text"sv;
-static constexpr StringView selftest_system_mode = "self-test"sv;
-static constexpr StringView graphical_system_mode = "graphical"sv;
-ByteString g_system_mode = graphical_system_mode;
-Vector<NonnullRefPtr<Unit>> g_services;
+static void sigchld_handler(int) { UnitManagement::the().sigchld_handler(); }
 
-// NOTE: This handler ensures that the destructor of g_services is called.
+// NOTE: This handler ensures that the destructor of UnitManagement is called.
 static void sigterm_handler(int)
 {
     exit(0);
 }
 
-static void sigchld_handler(int)
-{
-    for (;;) {
-        int status = 0;
-        pid_t pid = waitpid(-1, &status, WNOHANG);
-        if (pid < 0) {
-            perror("waitpid");
-            break;
-        }
-        if (pid == 0)
-            break;
-
-        dbgln_if(SYSTEMSERVER_DEBUG, "Reaped child with pid {}, exit status {}", pid, status);
-
-        Service* service = Service::find_by_pid(pid);
-        if (service == nullptr) {
-            // This can happen for multi-instance services.
-            continue;
-        }
-
-        if (auto result = service->did_exit(status); result.is_error())
-            dbgln("{}: {}", service->name(), result.release_error());
-    }
-}
-
 namespace SystemServer {
-
-static ErrorOr<void> determine_system_mode()
-{
-    ArmedScopeGuard declare_text_mode_on_failure([&] {
-        // Note: Only if the mode is not set to self-test, degrade it to text mode.
-        if (g_system_mode != selftest_system_mode)
-            g_system_mode = text_system_mode;
-    });
-
-    auto file_or_error = Core::File::open("/sys/kernel/system_mode"sv, Core::File::OpenMode::Read);
-    if (file_or_error.is_error()) {
-        dbgln("Failed to read system_mode: {}", file_or_error.error());
-        // Continue and assume "text" mode.
-        return {};
-    }
-    auto const system_mode_buf_or_error = file_or_error.value()->read_until_eof();
-    if (system_mode_buf_or_error.is_error()) {
-        dbgln("Failed to read system_mode: {}", system_mode_buf_or_error.error());
-        // Continue and assume "text" mode.
-        return {};
-    }
-    ByteString const system_mode = ByteString::copy(system_mode_buf_or_error.value(), Chomp);
-
-    g_system_mode = system_mode;
-    declare_text_mode_on_failure.disarm();
-
-    dbgln("Read system_mode: {}", g_system_mode);
-    return {};
-}
 
 static ErrorOr<void> prepare_bare_minimum_filesystem_mounts()
 {
@@ -207,66 +150,6 @@ static ErrorOr<void> create_tmp_semaphore_directory()
     return {};
 }
 
-static Optional<Target&> find_target_for(StringView target_name)
-{
-    for (auto& unit : g_services) {
-        if (is<Target>(*unit)) {
-            auto target = static_ptr_cast<Target>(unit);
-            if (target->name() == target_name)
-                return *target;
-        }
-    }
-    return {};
-}
-
-static ErrorOr<void> activate_target(Target& target)
-{
-    // By checking and marking a target as started immediately, circular dependencies will not hang SystemServer.
-    // However, they may cause weird behavior since one target *needs* to be started first
-    // (and this may not be predictable to the user).
-    if (target.has_been_activated()) {
-        dbgln_if(SYSTEMSERVER_DEBUG, "Skipping target {} as it is already started.", target.name());
-        return {};
-    }
-    target.set_start_in_progress();
-
-    // First start all target dependencies.
-    auto dependencies = target.depends_on();
-    for (auto& dependency_target_name : dependencies) {
-        auto dependency = find_target_for(dependency_target_name);
-        // FIXME: What to do if the target doesn't exist?
-        TRY(activate_target(dependency.value()));
-    }
-
-    dbgln("Activating services for target {}...", target.name());
-    for (auto& unit : g_services) {
-        if (is<Service>(*unit)) {
-            auto service = static_ptr_cast<Service>(unit);
-            if (service->is_required_for_target(target.name()) && !service->has_been_activated()) {
-                dbgln_if(SYSTEMSERVER_DEBUG, "Activating {}", service->name());
-                TRY(service->setup_sockets());
-                if (auto result = service->activate(); result.is_error())
-                    dbgln("{}: {}", service->name(), result.release_error());
-            }
-        }
-    }
-
-    target.set_reached();
-    dbgln("Reached target {}.", target.name());
-    return {};
-}
-
-static ErrorOr<void> activate_services(Core::ConfigFile const& config)
-{
-    for (auto const& name : config.groups()) {
-        auto service = TRY(Service::try_create(config, name));
-        g_services.append(move(service));
-    }
-    // This will intentionally crash if the system mode has no associated target.
-    auto& target = find_target_for(g_system_mode).value();
-    return activate_target(target);
-}
-
 static ErrorOr<void> reopen_base_file_descriptors()
 {
     // Note: We open the /dev/null device and set file descriptors 0, 1, 2 to it
@@ -280,42 +163,6 @@ static ErrorOr<void> reopen_base_file_descriptors()
     TRY(Core::System::dup2(stdin_new_fd, 0));
     TRY(Core::System::dup2(stdin_new_fd, 1));
     TRY(Core::System::dup2(stdin_new_fd, 2));
-    return {};
-}
-
-static ErrorOr<void> activate_base_services_based_on_system_mode()
-{
-    if (g_system_mode == graphical_system_mode) {
-        bool found_gpu_device = false;
-        for (int attempt = 0; attempt < 10; attempt++) {
-            struct stat file_state;
-            int rc = lstat("/dev/gpu/connector0", &file_state);
-            if (rc == 0) {
-                found_gpu_device = true;
-                break;
-            }
-            sleep(1);
-        }
-        if (!found_gpu_device) {
-            dbgln("WARNING: No device nodes at /dev/gpu/ directory after 10 seconds. This is probably a sign of disabled graphics functionality.");
-            dbgln("To cope with this, graphical mode will not be enabled.");
-            g_system_mode = text_system_mode;
-        }
-    }
-
-    // Read our config and instantiate services.
-    // This takes care of setting up sockets.
-    auto config = TRY(Core::ConfigFile::open_for_system("SystemServer"));
-    TRY(activate_services(*config));
-    return {};
-}
-
-static ErrorOr<void> activate_user_services_based_on_system_mode()
-{
-    // Read our config and instantiate services.
-    // This takes care of setting up sockets.
-    auto config = TRY(Core::ConfigFile::open_for_app("SystemServer"));
-    TRY(activate_services(*config));
     return {};
 }
 
@@ -340,19 +187,21 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
         TRY(SystemServer::create_tmp_coredump_directory());
         TRY(SystemServer::set_default_coredump_directory());
         TRY(SystemServer::create_tmp_semaphore_directory());
-        TRY(SystemServer::determine_system_mode());
     }
+
+    TRY(UnitManagement::the().determine_system_mode());
+    if (!user)
+        UnitManagement::the().wait_for_gpu_if_needed();
 
     Core::EventLoop event_loop;
 
     event_loop.register_signal(SIGCHLD, sigchld_handler);
     event_loop.register_signal(SIGTERM, sigterm_handler);
 
-    if (!user) {
-        TRY(SystemServer::activate_base_services_based_on_system_mode());
-    } else {
-        TRY(SystemServer::activate_user_services_based_on_system_mode());
-    }
+    auto config = user ? TRY(Core::ConfigFile::open_for_app("SystemServer")) : TRY(Core::ConfigFile::open_for_system("SystemServer"));
+    TRY(UnitManagement::the().load_config(config));
+
+    TRY(UnitManagement::the().activate_system_mode_target());
 
     return event_loop.exec();
 }
