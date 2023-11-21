@@ -114,7 +114,15 @@ ErrorOr<void> Service::activate()
 
 bool Service::has_been_activated() const
 {
-    return m_pid > 0;
+    return m_pid > 0 || m_socket_notifier != nullptr;
+}
+
+bool Service::is_dead() const
+{
+    if (m_keep_alive)
+        return has_been_activated() && m_restart_attempts < 2;
+
+    return !has_been_activated();
 }
 
 ErrorOr<void> Service::change_privileges()

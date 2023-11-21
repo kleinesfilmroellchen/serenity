@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "ConnectionFromClient.h"
 #include "Service.h"
 #include "UnitManagement.h"
 #include <AK/Assertions.h>
@@ -21,6 +22,7 @@
 #include <LibCore/File.h>
 #include <LibCore/Process.h>
 #include <LibCore/System.h>
+#include <LibIPC/MultiServer.h>
 #include <LibMain/Main.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -175,6 +177,8 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     args_parser.add_option(user, "Run in user-mode", "user", 'u');
     args_parser.parse(arguments);
 
+    UnitManagement::the().set_is_user_mode(user);
+
     if (!user) {
         TRY(SystemServer::mount_all_filesystems());
         TRY(SystemServer::prepare_synthetic_filesystems());
@@ -190,10 +194,12 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     }
 
     TRY(UnitManagement::the().determine_system_mode());
-    if (!user)
-        UnitManagement::the().wait_for_gpu_if_needed();
+    UnitManagement::the().wait_for_gpu_if_needed();
 
     Core::EventLoop event_loop;
+
+    auto const socket_path = user ? "/tmp/session/%sid/portal/systemserver"sv : "/tmp/portal/systemserver"sv;
+    auto server = TRY(ControlServer::try_create(socket_path));
 
     event_loop.register_signal(SIGCHLD, sigchld_handler);
     event_loop.register_signal(SIGTERM, sigterm_handler);

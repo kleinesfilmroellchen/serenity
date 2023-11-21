@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Service.h"
+#include <AK/IterationDecision.h>
 #include <AK/Singleton.h>
 
 class UnitManagement final {
@@ -26,6 +27,18 @@ public:
 
     void sigterm_handler();
     void sigchld_handler();
+
+    template<typename Callback>
+    IterationDecision for_each_unit(Callback function) const
+    {
+        for (auto const& unit_ptr : m_units) {
+            auto const& unit = *unit_ptr;
+            auto decision = function(unit);
+            if (decision == IterationDecision::Break)
+                return IterationDecision::Break;
+        }
+        return IterationDecision::Continue;
+    }
 
 private:
     Vector<NonnullRefPtr<Unit>> m_units;

@@ -53,6 +53,11 @@ public:
 
     // May be -1 if this service has no associated PID.
     int pid() const { return m_pid; }
+    // Whether the service is either not activated or has exited.
+    // No process has to be running for the service right now for it to be alive, but one will run in the near future.
+    bool is_dead() const;
+    bool is_lazy() const { return m_lazy; }
+    StringView executable_path() const { return m_executable_path; }
 
     // Configuration APIs only used by Unit.
     Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, bool lazy, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets, bool multi_instance, bool accept_socket_connections);
@@ -135,6 +140,7 @@ public:
 
     bool is_system_mode() const { return m_is_system_mode; }
     ReadonlySpan<ByteString> depends_on() const { return m_depends_on; }
+    State state() const { return m_state; }
 
     void set_start_in_progress()
     {

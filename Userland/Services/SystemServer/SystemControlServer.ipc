@@ -1,0 +1,10 @@
+#include <SystemServer/IPCTypes.h>
+
+endpoint SystemControlServer
+{
+    activate_target(String target_name) => (SystemServer::MaybeUnitError result)
+
+    list_units() => (Vector<String> unit_names)
+
+    query_unit_info(String unit_name) => (SystemServer::ErrorOrUnitInfo result)
+}
