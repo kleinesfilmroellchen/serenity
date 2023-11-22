@@ -69,7 +69,7 @@ ErrorOr<void> Service::setup_sockets()
 
 void Service::setup_notifier()
 {
-    VERIFY(m_lazy);
+    VERIFY(m_mode != Mode::Normal);
     VERIFY(m_sockets.size() == 1);
     VERIFY(!m_socket_notifier);
 
@@ -87,7 +87,7 @@ ErrorOr<void> Service::handle_socket_connection()
 
     int socket_fd = m_sockets[0].fd;
 
-    if (m_accept_socket_connections) {
+    if (m_mode == Mode::MultiInstance) {
         auto const accepted_fd = TRY(Core::System::accept(socket_fd, nullptr, nullptr));
 
         TRY(determine_account(accepted_fd));
@@ -105,7 +105,7 @@ ErrorOr<void> Service::activate()
 {
     VERIFY(!has_been_activated());
 
-    if (m_lazy)
+    if (m_mode != Mode::Normal)
         setup_notifier();
     else
         TRY(spawn());
@@ -236,7 +236,7 @@ ErrorOr<void> Service::spawn(int socket_fd)
         }));
 
         TRY(Core::System::exec(m_executable_path, arguments, Core::System::SearchInPath::No));
-    } else if (!m_multi_instance) {
+    } else if (m_mode != Mode::MultiInstance) {
         // We are the parent.
         m_pid = pid;
     }
@@ -249,7 +249,7 @@ ErrorOr<void> Service::did_exit(int status)
     using namespace AK::TimeLiterals;
 
     VERIFY(m_pid > 0);
-    VERIFY(!m_multi_instance);
+    VERIFY(m_mode != Mode::MultiInstance);
 
     if (WIFEXITED(status))
         dbgln("Service {} has exited with exit code {}", name(), WEXITSTATUS(status));
@@ -283,15 +283,13 @@ ErrorOr<void> Service::did_exit(int status)
     return {};
 }
 
-Service::Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, bool lazy, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets, bool multi_instance, bool accept_socket_connections)
+Service::Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, Mode mode, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets)
     : m_executable_path(move(executable_path))
     , m_extra_arguments(move(extra_arguments))
     , m_priority(priority)
     , m_keep_alive(keep_alive)
-    , m_accept_socket_connections(accept_socket_connections)
-    , m_lazy(lazy)
+    , m_mode(mode)
     , m_targets(move(targets))
-    , m_multi_instance(multi_instance)
     , m_environment(move(environment))
 {
     set_name(name);
@@ -323,12 +321,20 @@ ErrorOr<NonnullRefPtr<Unit>> Unit::try_create(Core::ConfigFile const& config, St
     } else if (type == "Service") {
         auto executable_path = config.read_entry(name, "Executable", ByteString::formatted("/bin/{}", name));
         auto extra_arguments = config.read_entry(name, "Arguments");
-        auto lazy = config.read_bool_entry(name, "Lazy");
         auto keep_alive = config.read_bool_entry(name, "KeepAlive");
         auto environment = config.read_entry(name, "Environment");
         auto targets = config.read_entry(name, "Targets", "graphical").split(',');
-        auto multi_instance = config.read_bool_entry(name, "MultiInstance");
-        auto accept_socket_connections = config.read_bool_entry(name, "AcceptSocketConnections");
+
+        auto mode_text = config.read_entry(name, "ServiceType", "Normal");
+        Service::Mode mode;
+        if (mode_text == "Normal"sv)
+            mode = Service::Mode::Normal;
+        else if (mode_text == "Lazy"sv)
+            mode = Service::Mode::Lazy;
+        else if (mode_text == "MultiInstance"sv)
+            mode = Service::Mode::MultiInstance;
+        else
+            return Error::from_string_view("Mode is not Normal, Lazy or MultiInstance"sv);
 
         auto priority_string = config.read_entry_optional(name, "Priority");
         int priority;
@@ -341,7 +347,7 @@ ErrorOr<NonnullRefPtr<Unit>> Unit::try_create(Core::ConfigFile const& config, St
         else
             return Error::from_string_view("Priority must be either low, normal, or high"sv);
 
-        auto service = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) Service({}, name, executable_path, extra_arguments, lazy, priority, keep_alive, environment, targets, multi_instance, accept_socket_connections)));
+        auto service = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) Service({}, name, executable_path, extra_arguments, mode, priority, keep_alive, environment, targets)));
 
         auto stdio_file_path = config.read_entry_optional(name, "StdIO");
         if (stdio_file_path.has_value())
@@ -384,13 +390,10 @@ ErrorOr<NonnullRefPtr<Unit>> Unit::try_create(Core::ConfigFile const& config, St
             }
         }
 
-        if (lazy && sockets.size() != 1)
-            return Error::from_string_view("Lazy requires Socket, but only one."sv);
+        if (mode != Service::Mode::Normal && sockets.size() != 1)
+            return Error::from_string_view("Lazy and MultiInstance requires Socket, but only one."sv);
 
-        if (accept_socket_connections && (sockets.size() != 1 || !lazy || !multi_instance))
-            return Error::from_string_view("AcceptSocketConnections always requires Socket (single), Lazy, and MultiInstance."sv);
-
-        if (multi_instance && keep_alive)
+        if (mode == Service::Mode::MultiInstance && keep_alive)
             return Error::from_string_view("MultiInstance doesn't work with KeepAlive."sv);
 
         service->set_sockets({}, move(sockets));

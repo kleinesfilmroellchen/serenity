@@ -17,26 +17,26 @@ Unit types are distinguished by the `Type` key: `Service` or `Target`. This defa
 
 A service accepts the following options:
 
+* `ServiceType` - the kind of service defined. This determines how and when the service is spawned.
+	- `Normal` (the default) - Service is spawned immediately and a maximum of one instance is running at all times.
+	- `Lazy` - Service is only spawned once a client attempts to connect to its socket.
+	- `MultiInstance` - Multiple processes can be running for this service, one for each client. This is also a kind of "lazy" service that only gets spawned when a client connects.
 * `Executable` - an executable to spawn. If no explicit executable is specified, SystemServer assumes `/bin/{service name}` (for example, `/bin/WindowServer` for a service named `WindowServer`).
 * `Arguments` - a space-separated list of arguments to pass to the service as `argv` (excluding `argv[0]`). By default, SystemServer does not pass any arguments other than `argv[0]`.
 * `StdIO` - a path to a file to be passed as standard I/O streams to the service. By default, services run with `/dev/null` for standard I/O.
 * `Priority` - the scheduling priority to set for the service, either "low" (10), "normal" (30), or "high" (50). The default is "normal".
 * `KeepAlive` - whether the service should be restarted if it exits or crashes. For lazy services, this means the service will get respawned once a new connection is attempted on their socket after they exit or crash.
-* `Lazy` - whether the service should only get spawned once a client attempts to connect to their socket.
 * `Socket` - a comma-separated list of paths to sockets to create on behalf of the service. For lazy services, SystemServer will actually watch the socket for new connection attempts. See [socket takeover mechanism](#socket-takeover-mechanism) for details on how sockets are passed to services by SystemServer.
 * `SocketPermissions` - comma-separated list of (octal) file system permissions for the socket file. The default permissions are 0600. If the number of socket permissions defined is less than the number of sockets defined, then the last defined permission will be used for the remainder of the items in `Socket`.
 * `User` - a name of the user to run the service as. This impacts what UID, GID (and extra GIDs) the service processes have. By default, services are run as root.
 * `WorkingDirectory` - the working directory in which the service is spawned. By default, services are spawned in the root (`"/"`) directory.
 * `Targets` - a comma-separated list of targets which start this target. If no target is specified, the service will not start on its own, not even if it is a lazy service.
 * `Environment` - a space-separated list of "variable=value" pairs to set in the environment for the service.
-* `MultiInstance` - whether multiple instances of the service can be running simultaneously.
-* `AcceptSocketConnections` - whether SystemServer should accept connections on the socket, and spawn an instance of the service for each client connection.
 
 Note that:
-* `Lazy` requires `Socket`, but only one socket must be defined.
+* The lazy service types (`Lazy` and `MultiInstance`) require `Socket`, but only one socket must be defined.
 * `SocketPermissions` require a `Socket`.
-* `MultiInstance` conflicts with `KeepAlive`.
-* `AcceptSocketConnections` requires `Socket` (only one), `Lazy`, and `MultiInstance`.
+* The service type `MultiInstance` conflicts with `KeepAlive`.
 
 ### Environment
 

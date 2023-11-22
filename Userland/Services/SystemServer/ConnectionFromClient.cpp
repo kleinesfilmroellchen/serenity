@@ -77,7 +77,7 @@ Messages::SystemControlServer::QueryUnitInfoResponse ConnectionFromClient::query
         if (service.has_been_activated()) {
             if (service.is_dead())
                 state = SystemServer::UnitState::ActiveDead;
-            else if (service.is_lazy() && service.pid() < 0)
+            else if (service.mode() == Service::Mode::Lazy)
                 state = SystemServer::UnitState::ActiveLazy;
             else
                 state = SystemServer::UnitState::ActiveRunning;

@@ -41,6 +41,14 @@ class Service final : public Unit {
     C_OBJECT_ABSTRACT(Service)
 
 public:
+    enum class Mode {
+        Normal,
+        // We should only spawn this service once somebody connects to the socket.
+        Lazy,
+        // Several instances of this service can run at once.
+        MultiInstance,
+    };
+
     virtual ~Service();
 
     bool is_required_for_target(StringView target_name) const;
@@ -56,11 +64,11 @@ public:
     // Whether the service is either not activated or has exited.
     // No process has to be running for the service right now for it to be alive, but one will run in the near future.
     bool is_dead() const;
-    bool is_lazy() const { return m_lazy; }
+    Mode mode() const { return m_mode; }
     StringView executable_path() const { return m_executable_path; }
 
     // Configuration APIs only used by Unit.
-    Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, bool lazy, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets, bool multi_instance, bool accept_socket_connections);
+    Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, Mode mode, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets);
     void set_stdio_file_path(Badge<Unit>, ByteString stdio_file_path) { m_stdio_file_path = move(stdio_file_path); }
     void set_user(Badge<Unit>, ByteString user);
     void set_sockets(Badge<Unit>, Vector<SocketDescriptor> sockets) { m_sockets = move(sockets); }
@@ -82,20 +90,14 @@ private:
     int m_priority;
     // Whether we should re-launch it if it exits.
     bool m_keep_alive;
-    // Whether we should accept connections on the socket and pass the accepted
-    // (and not listening) socket to the service. This requires a multi-instance
-    // service.
-    bool m_accept_socket_connections;
-    // Whether we should only spawn this service once somebody connects to the socket.
-    bool m_lazy;
+    // The service's mode, which determines how it is started.
+    Mode m_mode;
     // The name of the user we should run this service as.
     Optional<ByteString> m_user {};
     // The working directory in which to spawn the service.
     Optional<ByteString> m_working_directory {};
     // Targets in which to run this service.
     Vector<ByteString> m_targets;
-    // Whether several instances of this service can run at once.
-    bool m_multi_instance;
     // Environment variables to pass to the service.
     ByteString m_environment;
     // Socket descriptors for this service.
