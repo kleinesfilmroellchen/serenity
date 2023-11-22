@@ -10,7 +10,9 @@
 #include "UnitManagement.h"
 #include <AK/Debug.h>
 #include <LibCore/ConfigFile.h>
+#include <LibCore/EventLoop.h>
 #include <LibCore/File.h>
+#include <LibCore/ProcessStatisticsReader.h>
 #include <LibCore/System.h>
 
 static constexpr StringView text_system_mode = "text"sv;
@@ -53,12 +55,16 @@ void UnitManagement::sigchld_handler()
 
         m_services_by_pid.remove(service->pid());
 
-        // Don't restart services.
+        // Don't restart services during shutdown.
         if (m_in_shutdown)
             continue;
 
         if (auto result = service->did_exit(status); result.is_error())
             dbgln("{}: {}", service->name(), result.release_error());
+
+        // If service restarted a process, add it back to our list.
+        if (service->pid() > 0)
+            m_services_by_pid.set(service->pid(), service);
     }
 }
 
@@ -86,7 +92,15 @@ ErrorOr<void> UnitManagement::handle_special_target(StringView special_target_na
 {
     if (special_target_name == "shutdown") {
         m_in_shutdown = true;
-        dbgln("SerenityOS shutting down...");
+
+        if (m_server_mode == ServerMode::System)
+            dbgln("SerenityOS shutting down...");
+        else {
+            dbgln("Exiting session...");
+            // dbgln("FUCKERY! Gonna die right now!");
+            // exit(0);
+        }
+
         for (auto const& service : m_services_by_pid) {
             auto result = Core::System::kill(service.key, SIGTERM);
             if (result.is_error()) {
@@ -96,11 +110,23 @@ ErrorOr<void> UnitManagement::handle_special_target(StringView special_target_na
             }
         }
 
+        // After killing services, let's kill all other processes too.
+        // This is particularly important since session SystemServers are not one of our services.
+        // FIXME: This feels like a hack. Why doesn't LoginServer close down its SystemServers properly.
+        auto process_list = TRY(Core::ProcessStatisticsReader::get_all(false));
+
         size_t waited_count = 0;
         while (!m_services_by_pid.is_empty() && waited_count < 10) {
+            dbgln("Waiting on {} services ({})...", m_services_by_pid.size(), waited_count);
             usleep(1'000'000);
+            // Calls signal handlers so that services get cleaned up.
+            Core::EventLoop::current().pump(Core::EventLoop::WaitMode::PollForEvents);
             waited_count++;
         }
+
+        // Don't turn off the system in user mode.
+        if (m_server_mode == ServerMode::User)
+            return {};
 
         dbgln("All processes have exited. Turning off the computer...");
 
@@ -116,12 +142,8 @@ ErrorOr<void> UnitManagement::handle_special_target(StringView special_target_na
 
 ErrorOr<void> UnitManagement::activate_target(Target& target)
 {
-    if (target.is_special()) {
-        // User mode does not support special targets.
-        if (m_server_mode == ServerMode::User)
-            return EPERM;
+    if (target.is_special())
         return handle_special_target(target.name());
-    }
 
     // By checking and marking a target as started immediately, circular dependencies will not hang SystemServer.
     // However, they may cause weird behavior since one target *needs* to be started first
@@ -160,7 +182,7 @@ ErrorOr<void> UnitManagement::activate_service(Service& service)
 {
     dbgln_if(SYSTEMSERVER_DEBUG, "Activating {}", service.name());
     // Make sure to keep track of the service, no matter how broken its setup was.
-    auto add_to_services = [service = NonnullRefPtr(service), this]() {
+    ScopeGuard add_to_services = [service = NonnullRefPtr(service), this]() {
         auto pid = service->pid();
         if (pid > 0)
             m_services_by_pid.set(pid, service);

@@ -71,47 +71,24 @@ Messages::SystemControlServer::QueryUnitInfoResponse ConnectionFromClient::query
     if (is<Service>(unit)) {
         auto const& service = static_cast<Service const&>(unit);
 
-        auto state = SystemServer::UnitState::Inactive;
-        // FIXME: A dead service due to too many restarts counts as not activated.
-        //        This is a problem in the service state management that should be fixed there.
-        if (service.has_been_activated()) {
-            if (service.is_dead())
-                state = SystemServer::UnitState::ActiveDead;
-            else if (service.mode() == Service::Mode::Lazy)
-                state = SystemServer::UnitState::ActiveLazy;
-            else
-                state = SystemServer::UnitState::ActiveRunning;
-        }
-
         auto name = String::from_deprecated_string(service.name());
         if (name.is_error())
             return { SystemServer::UnitError::OSError };
         return { SystemServer::ServiceInfo {
             .name = name.release_value(),
             .executable_path = service.executable_path(),
-            .state = state,
+            .state = service.state().state,
             .pid = service.pid(),
         } };
     } else if (is<Target>(unit)) {
         auto const& target = static_cast<Target const&>(unit);
-
-        SystemServer::UnitState state;
-        switch (target.state()) {
-        case Target::State::Inactive:
-            state = SystemServer::UnitState::Inactive;
-            break;
-        case Target::State::StartInProgress:
-        case Target::State::Reached:
-            state = SystemServer::UnitState::ActiveRunning;
-            break;
-        }
 
         auto name = String::from_deprecated_string(target.name());
         if (name.is_error())
             return { SystemServer::UnitError::OSError };
         return { SystemServer::TargetInfo {
             .name = name.release_value(),
-            .state = state,
+            .state = target.state().state,
         } };
     } else {
         VERIFY_NOT_REACHED();

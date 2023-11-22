@@ -62,6 +62,9 @@ ErrorOr<void> Service::setup_socket(SocketDescriptor& socket)
 
 ErrorOr<void> Service::setup_sockets()
 {
+    VERIFY(!has_been_activated());
+    m_state.activate();
+
     for (SocketDescriptor& socket : m_sockets)
         TRY(setup_socket(socket));
     return {};
@@ -69,7 +72,7 @@ ErrorOr<void> Service::setup_sockets()
 
 void Service::setup_notifier()
 {
-    VERIFY(m_mode != Mode::Normal);
+    VERIFY(m_mode != ServiceMode::Normal);
     VERIFY(m_sockets.size() == 1);
     VERIFY(!m_socket_notifier);
 
@@ -87,7 +90,7 @@ ErrorOr<void> Service::handle_socket_connection()
 
     int socket_fd = m_sockets[0].fd;
 
-    if (m_mode == Mode::MultiInstance) {
+    if (m_mode == ServiceMode::MultiInstance) {
         auto const accepted_fd = TRY(Core::System::accept(socket_fd, nullptr, nullptr));
 
         TRY(determine_account(accepted_fd));
@@ -97,32 +100,25 @@ ErrorOr<void> Service::handle_socket_connection()
         remove_child(*m_socket_notifier);
         m_socket_notifier = nullptr;
         TRY(spawn(socket_fd));
+        m_state.set_running();
     }
     return {};
 }
 
 ErrorOr<void> Service::activate()
 {
-    VERIFY(!has_been_activated());
+    VERIFY(!m_state.is_active());
+    ArmedScopeGuard set_dead = [this] { this->m_state.set_dead(); };
 
-    if (m_mode != Mode::Normal)
+    if (m_mode != ServiceMode::Normal)
         setup_notifier();
     else
         TRY(spawn());
+
+    set_dead.disarm();
+    m_state.set_active(m_mode);
+
     return {};
-}
-
-bool Service::has_been_activated() const
-{
-    return m_pid > 0 || m_socket_notifier != nullptr;
-}
-
-bool Service::is_dead() const
-{
-    if (m_keep_alive)
-        return has_been_activated() && m_restart_attempts < 2;
-
-    return !has_been_activated();
 }
 
 ErrorOr<void> Service::change_privileges()
@@ -236,7 +232,7 @@ ErrorOr<void> Service::spawn(int socket_fd)
         }));
 
         TRY(Core::System::exec(m_executable_path, arguments, Core::System::SearchInPath::No));
-    } else if (m_mode != Mode::MultiInstance) {
+    } else if (m_mode != ServiceMode::MultiInstance) {
         // We are the parent.
         m_pid = pid;
     }
@@ -249,7 +245,9 @@ ErrorOr<void> Service::did_exit(int status)
     using namespace AK::TimeLiterals;
 
     VERIFY(m_pid > 0);
-    VERIFY(m_mode != Mode::MultiInstance);
+    VERIFY(m_mode != ServiceMode::MultiInstance);
+    m_state.set_restarting();
+    ArmedScopeGuard set_dead = [this] { this->m_state.set_dead(); };
 
     if (WIFEXITED(status))
         dbgln("Service {} has exited with exit code {}", name(), WEXITSTATUS(status));
@@ -264,7 +262,7 @@ ErrorOr<void> Service::did_exit(int status)
     auto run_time = m_run_timer.elapsed_time();
     bool exited_successfully = WIFEXITED(status) && WEXITSTATUS(status) == 0;
 
-    if (!exited_successfully && run_time < 1_sec) {
+    if (!exited_successfully && run_time < 10_sec) {
         switch (m_restart_attempts) {
         case 0:
             dbgln("Trying again");
@@ -280,10 +278,13 @@ ErrorOr<void> Service::did_exit(int status)
     }
 
     TRY(activate());
+
+    set_dead.disarm();
+
     return {};
 }
 
-Service::Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, Mode mode, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets)
+Service::Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, ServiceMode mode, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets)
     : m_executable_path(move(executable_path))
     , m_extra_arguments(move(extra_arguments))
     , m_priority(priority)
@@ -326,13 +327,13 @@ ErrorOr<NonnullRefPtr<Unit>> Unit::try_create(Core::ConfigFile const& config, St
         auto targets = config.read_entry(name, "Targets", "graphical").split(',');
 
         auto mode_text = config.read_entry(name, "ServiceType", "Normal");
-        Service::Mode mode;
+        ServiceMode mode;
         if (mode_text == "Normal"sv)
-            mode = Service::Mode::Normal;
+            mode = ServiceMode::Normal;
         else if (mode_text == "Lazy"sv)
-            mode = Service::Mode::Lazy;
+            mode = ServiceMode::Lazy;
         else if (mode_text == "MultiInstance"sv)
-            mode = Service::Mode::MultiInstance;
+            mode = ServiceMode::MultiInstance;
         else
             return Error::from_string_view("Mode is not Normal, Lazy or MultiInstance"sv);
 
@@ -390,10 +391,10 @@ ErrorOr<NonnullRefPtr<Unit>> Unit::try_create(Core::ConfigFile const& config, St
             }
         }
 
-        if (mode != Service::Mode::Normal && sockets.size() != 1)
+        if (mode != ServiceMode::Normal && sockets.size() != 1)
             return Error::from_string_view("Lazy and MultiInstance requires Socket, but only one."sv);
 
-        if (mode == Service::Mode::MultiInstance && keep_alive)
+        if (mode == ServiceMode::MultiInstance && keep_alive)
             return Error::from_string_view("MultiInstance doesn't work with KeepAlive."sv);
 
         service->set_sockets({}, move(sockets));
@@ -426,11 +427,6 @@ Service::~Service()
         if (auto rc = remove(socket.path.characters()); rc != 0)
             dbgln("{}", Error::from_errno(errno));
     }
-}
-
-bool Target::has_been_activated() const
-{
-    return m_state != State::Inactive;
 }
 
 ErrorOr<NonnullRefPtr<Target>> Target::create_special_target(SpecialTargetKind kind)

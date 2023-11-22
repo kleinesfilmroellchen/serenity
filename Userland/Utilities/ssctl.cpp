@@ -25,13 +25,21 @@ static constexpr StringView state_to_string(SystemServer::UnitState state)
         return "ActiveDead"sv;
     case SystemServer::ActiveRunning:
         return "ActiveRunning"sv;
+    case SystemServer::Activating:
+        return "Activating"sv;
+    case SystemServer::ActiveMultiInstance:
+        return "ActiveMultiInstance"sv;
+    case SystemServer::Restarting:
+        return "Restarting"sv;
+    case SystemServer::Stopping:
+        return "Stopping"sv;
     }
     VERIFY_NOT_REACHED();
 }
 
 static ErrorOr<void> run_list_command(ReadonlySpan<String>)
 {
-#define table_format "{:<25} {:<7} {:<15} {:<20}"
+#define table_format "{:<25} {:<7} {:<19} {:<20}"
     outln(table_format, "name", "type", "state", "executable");
     outln(table_format, "----", "----", "----", "----");
     auto print_info = [](auto const& result) {

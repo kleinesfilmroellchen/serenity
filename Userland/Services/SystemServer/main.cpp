@@ -35,11 +35,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static void sigchld_handler(int) { UnitManagement::the().sigchld_handler(); }
+static void sigchld_handler(int)
+{
+    dbgln("SIGCHLD");
+    UnitManagement::the().sigchld_handler();
+}
 
-// NOTE: This handler ensures that the destructor of UnitManagement is called.
 static void sigterm_handler(int)
 {
+    MUST(UnitManagement::the().activate_target(UnitManagement::the().find_target_for("shutdown"sv).value()));
     exit(0);
 }
 

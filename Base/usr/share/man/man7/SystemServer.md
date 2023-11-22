@@ -15,6 +15,19 @@ More specifically, SystemServer has these responsibilities:
 -   As user/session init, bring up a user's (graphical or text) session according to the user's configuration.
 -   Manage service processes. This means: Starting, stopping, restarting, and scheduling services according to various requests (cronjobs, user commands, socket connections).
 
+### Unit states
+
+A unit may be in one of a multitude of states, which affect what SystemServer will do next with the unit. Run `ssctl list` (or one of its subcommands) to see the state of units.
+
+- Inactive - Starting state of units. SystemServer does nothing with inactive units unless instructed to do so by the user or configuration. Once this happens, the unit transitions to the Activating state.
+- Activating - First-time activation state of units. Activating is one of a few transitive states, which are expected to last for a brief period of time while some setup (or teardown) work is in progress. The Activating state is responsible for performing first-time setup of services, like socket notifications for lazy services. Additionally, it performs regular startup duties for units which are performed on every restart of the unit, like starting all dependent units of a target. From Activating, a unit transitions into the ActiveRunning, ActiveLazy or ActiveMultiInstance state, depending on unit type and configuration.
+- ActiveRunning - Unit is active and running. This is one of the four Active states that indicate a unit which has been activated (successfully or unsuccessfully). This state indicates that the unit is operating successfully. This is the only available active state for targets, as they enter this state once their dependencies have been activated. For services, this means that an associated process is running.
+- ActiveLazy - Lazy service is active but not running. This Active state is used for lazy services to indicate that while the service is activated, its associated process is not running yet, since no client has connected. Being in this state additionally means that socket notifications are set up correctly. A lazy service transitions into the ActiveRunning state once a client connects and a process is started.
+- ActiveMultiInstance - MultiInstance service is active. This is the only valid Active state for services of type MultiInstance; their processes are spawned per client on-demand and need no further state management.
+- ActiveDead - Service is active, but not running anymore. This can have two primary reasons: Either a service exited with an exit code of 0, indicating that it has completed its task and doesn't wish to be restarted. Or a service has been restarted too often and SystemServer has given up trying to restart it. In either case the unit is technically active, but nothing will happen to it anymore.
+- Restarting - Service is being restarted after failure. This only happens if a service exits with a non-zero exit code (voluntarily), terminates due to a signal (involuntarily, e.g. a crash or an external kill signal), and the service is configured to be kept alive. Like Activating, this performs startup duties, but not those that need to only be performed once, like socket setup.
+- Stopping - Service is being stopped for good. This may happen as a transition from any of the active states.
+
 ## Services
 
 A service is a process, usually a daemon or helper process, that may be started by SystemServer according to a specific setup.
@@ -68,6 +81,14 @@ Normal targets can be defined in the configuration file by the user. Activating 
 ### Special targets
 
 There exist special-case targets like `shutdown` which are managed differently from other targets. They don't have an entry in the configuration file since their name and purpose is fixed.
+
+#### `shutdown`
+
+The shutdown target is responsible for shutting down the computer. When activated, it performs these tasks:
+-    Send a termination signal (SIGTERM) to all running processes. As per UNIX, services already use `SIGTERM` to perform proper cleanup and shutdown that shouldn't break anything.
+-    Wait for these services to exit.
+-    Send a hard kill signal (SIGKILL) to all processes to make sure nothing is alive anymore.
+-    Instruct the Kernel to shutdown via `/sys/kernel/power_state`.
 
 ## History
 

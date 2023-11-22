@@ -20,16 +20,23 @@ enum UnitError : u8 {
 // NOTE: Due to IPC constraints, we cannot use ErrorOr, since it is not default constructible even if the value type is void.
 using MaybeUnitError = Optional<UnitError>;
 
-// "Simple" unit state synthesized from other state information.
 enum UnitState : u8 {
     // Unit has not been activated.
     Inactive,
+    // Unit is currently being activated.
+    Activating,
     // Unit has been activated, but no associated program is running since it's a lazy service.
     ActiveLazy,
+    // A multi-instance service that has been activated. Any number (including none) of process instances may be running.
+    ActiveMultiInstance,
+    // Unit has a process running. This does not apply to multi-instance services.
+    ActiveRunning,
+    // A unit is not currently running, but active and will be restarted as soon as possible.
+    Restarting,
     // Unit has exited and will not be restarted, either because it's not configured to be restarted, or because three restarts have been attempted.
     ActiveDead,
-    // Unit has been activated and is running; this also applies to lazy multi-instance services.
-    ActiveRunning,
+    // Unit is being deactivated.
+    Stopping,
 };
 
 struct ServiceInfo {

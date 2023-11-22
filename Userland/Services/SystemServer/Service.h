@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "IPCTypes.h"
 #include <AK/ByteString.h>
 #include <AK/RefPtr.h>
 #include <AK/String.h>
@@ -25,35 +26,93 @@ struct SocketDescriptor {
     mode_t permissions;
 };
 
+enum class ServiceMode : u8 {
+    Normal,
+    // We should only spawn this service once somebody connects to the socket.
+    Lazy,
+    // Several instances of this service can run at once.
+    MultiInstance,
+};
+
 // Unit is a generalization of services, targets, cronjobs etc.
 // We borrow this name from systemd, but it doesn't *quite* mean the same thing for SystemServer.
 class Unit : public Core::EventReceiver {
     C_OBJECT_ABSTRACT(Unit)
 
 public:
+    // Unit state machine.
+    struct State {
+        SystemServer::UnitState state { SystemServer::UnitState::Inactive };
+
+        constexpr bool has_been_activated() const { return state != SystemServer::UnitState::Inactive && state != SystemServer::UnitState::Stopping; }
+        constexpr bool is_active() const { return state == SystemServer::UnitState::ActiveLazy || state == SystemServer::UnitState::ActiveMultiInstance || state == SystemServer::UnitState::ActiveRunning; }
+        constexpr bool operator==(SystemServer::UnitState const& other) const { return state == other; }
+        constexpr bool operator==(State const& other) const { return state == other.state; }
+
+        constexpr void activate()
+        {
+            VERIFY(!has_been_activated());
+            state = SystemServer::UnitState::Activating;
+        }
+        constexpr void set_active(ServiceMode mode)
+        {
+            switch (mode) {
+            case ServiceMode::Normal:
+                return set_running();
+            case ServiceMode::Lazy:
+                return set_running_lazy();
+            case ServiceMode::MultiInstance:
+                return set_running_multi_instance();
+            }
+        }
+        constexpr void set_running()
+        {
+            VERIFY(state == SystemServer::UnitState::Activating || state == SystemServer::UnitState::Restarting || state == SystemServer::UnitState::ActiveLazy);
+            state = SystemServer::UnitState::ActiveRunning;
+        }
+        constexpr void set_running_lazy()
+        {
+            VERIFY(state == SystemServer::UnitState::Activating || state == SystemServer::UnitState::Restarting);
+            state = SystemServer::UnitState::ActiveLazy;
+        }
+        constexpr void set_running_multi_instance()
+        {
+            VERIFY(state == SystemServer::UnitState::Activating);
+            state = SystemServer::UnitState::ActiveMultiInstance;
+        }
+        constexpr void set_dead()
+        {
+            // It's fine to "kill" a service that's already dead. set_dead is used as a scope guard in various places.
+            VERIFY(has_been_activated() || state == SystemServer::UnitState::ActiveDead);
+            state = SystemServer::UnitState::ActiveDead;
+        }
+        constexpr void set_restarting()
+        {
+            VERIFY(is_active());
+            state = SystemServer::UnitState::Restarting;
+        }
+    };
+
     virtual ~Unit() = default;
-    virtual bool has_been_activated() const = 0;
+
+    bool has_been_activated() const { return m_state.has_been_activated(); }
+
+    State state() const { return m_state; }
 
     static ErrorOr<NonnullRefPtr<Unit>> try_create(Core::ConfigFile const& config, StringView name);
+
+protected:
+    State m_state;
 };
 
 class Service final : public Unit {
     C_OBJECT_ABSTRACT(Service)
 
 public:
-    enum class Mode {
-        Normal,
-        // We should only spawn this service once somebody connects to the socket.
-        Lazy,
-        // Several instances of this service can run at once.
-        MultiInstance,
-    };
-
     virtual ~Service();
 
     bool is_required_for_target(StringView target_name) const;
     ErrorOr<void> activate();
-    virtual bool has_been_activated() const override;
     // Note: This is a `status` as in POSIX's wait syscall, not an exit-code.
     ErrorOr<void> did_exit(int status);
 
@@ -61,14 +120,11 @@ public:
 
     // May be -1 if this service has no associated PID.
     int pid() const { return m_pid; }
-    // Whether the service is either not activated or has exited.
-    // No process has to be running for the service right now for it to be alive, but one will run in the near future.
-    bool is_dead() const;
-    Mode mode() const { return m_mode; }
+    ServiceMode mode() const { return m_mode; }
     StringView executable_path() const { return m_executable_path; }
 
     // Configuration APIs only used by Unit.
-    Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, Mode mode, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets);
+    Service(Badge<Unit>, StringView name, ByteString executable_path, ByteString extra_arguments, ServiceMode mode, int priority, bool keep_alive, ByteString environment, Vector<ByteString> targets);
     void set_stdio_file_path(Badge<Unit>, ByteString stdio_file_path) { m_stdio_file_path = move(stdio_file_path); }
     void set_user(Badge<Unit>, ByteString user);
     void set_sockets(Badge<Unit>, Vector<SocketDescriptor> sockets) { m_sockets = move(sockets); }
@@ -91,7 +147,7 @@ private:
     // Whether we should re-launch it if it exits.
     bool m_keep_alive;
     // The service's mode, which determines how it is started.
-    Mode m_mode;
+    ServiceMode m_mode;
     // The name of the user we should run this service as.
     Optional<ByteString> m_user {};
     // The working directory in which to spawn the service.
@@ -128,38 +184,19 @@ class Target final : public Unit {
     C_OBJECT_ABSTRACT(Target)
 
 public:
-    enum class State {
-        // Target has not been started.
-        Inactive,
-        // Target's start is currently in progress.
-        StartInProgress,
-        // Target has been reached.
-        Reached,
-    };
-
     enum class SpecialTargetKind {
         Shutdown,
     };
     static ErrorOr<NonnullRefPtr<Target>> create_special_target(SpecialTargetKind);
 
     virtual ~Target() = default;
-    virtual bool has_been_activated() const override;
 
     bool is_system_mode() const { return m_is_system_mode; }
     bool is_special() const { return m_is_special; }
     ReadonlySpan<ByteString> depends_on() const { return m_depends_on; }
-    State state() const { return m_state; }
 
-    void set_start_in_progress()
-    {
-        VERIFY(m_state == State::Inactive);
-        m_state = State::StartInProgress;
-    }
-    void set_reached()
-    {
-        VERIFY(m_state == State::StartInProgress);
-        m_state = State::Reached;
-    }
+    void set_start_in_progress() { m_state.activate(); }
+    void set_reached() { m_state.set_running(); }
 
     Target(Badge<Unit>, StringView name, bool is_system_mode, Vector<ByteString> depends_on)
         : Target(name, is_system_mode, move(depends_on))
@@ -179,6 +216,4 @@ private:
     bool m_is_system_mode;
     bool m_is_special;
     Vector<ByteString> m_depends_on;
-
-    State m_state { State::Inactive };
 };
