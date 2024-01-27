@@ -20,8 +20,6 @@
 #include <LibDisassembly/ELFSymbolProvider.h>
 #include <LibELF/Image.h>
 #include <LibMain/Main.h>
-#include <LibX86/Disassembler.h>
-#include <LibX86/ELFSymbolProvider.h>
 #include <string.h>
 
 struct Symbol {
