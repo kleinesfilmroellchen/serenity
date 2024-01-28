@@ -108,6 +108,44 @@ allows you to use an integer argument instead of a hard-coded number.
 
 Not all type specifiers are compatible with all input types, of course.
 
+## Formatting datetime classes
+
+Date and time classes use a custom format that allows you to specify which subfields like day, month and year are formatted in which way. The format specifier can contain any number of literal characters, `{{` and `}}` escape codes, or field specifiers. Field specifiers use the normal curly brace format (`{}`) to format a number of primitively (usually integer or string) typed datetime fields. The argument index (the text before the colon) specifies which field to use. The format specifier for the field itself is exactly the same as the format specifier for the corresponding primitive type. Since there are no "formatting arguments" in the normal sense, width and precision cannot refer to an integer argument, but are required to use hard-coded numbers.
+
+The following field names are supported, inspired by the [`std::chrono` field names](https://en.cppreference.com/w/cpp/chrono/system_clock/formatter). Not all types support all fields, but some fields like timezone specifiers have a fallback. Most field names correspond to a certain calendar (like the ISO 8601 / Gregorian calendar that SerenityOS uses by default). Many fields have a certain default format which simplifies common formats like ISO 8601 datetime specifiers. There is currently no support for localizing text fields like month names.
+
+| Field name | Description                                             | Calendar | Type    | Default format |
+| ---------- | ------------------------------------------------------- | -------- | ------- | -------------- |
+| Y          | Year                                                    | ISO      | integer | `04`           |
+| m          | Month number                                            | ISO      | integer | `02`           |
+| d          | Day of month                                            | ISO      | integer | `02`           |
+| H          | Hour (24h clock)                                        |          | integer | `02`           |
+| I          | Hour (12h clock)                                        |          | integer | `02`           |
+| M          | Minute                                                  |          | integer | `02`           |
+| S          | Second                                                  |          | integer | `02`           |
+| f          | Fraction within a second (nanosecond / 10^-9 precision) |          | integer | `09`           |
+| Z          | Timezone name or empty if not available                 |          | string  |                |
+| z          | Timezone offset (`±HHMM`) or empty if not available     |          | string  |                |
+| 0z         | Timezone offset (`±HH:MM`) or empty if not available    |          | string  |                |
+
+### Examples
+
+Using datetime formatting in normal formatting contexts yields formatting strings like this:
+
+```c++
+String::formatted("{:{Y}-{m}-{d}}", datetime);
+String::formatted("{:{H}:{M}:{S}}", datetime);
+```
+
+The following examples only show the isolated format specifiers, which can also be passed to dedicated formatting functions on datetime classes.
+
+| Example                          | Description                            | Result                             |
+| -------------------------------- | -------------------------------------- | ---------------------------------- |
+| `{Y}-{m}-{d}T{H}:{M}:{S}.{f}{z}` | Full ISO 8601 standard datetime format | 2024-01-28T23:00:29.787110548+0100 |
+| `{d:1}.{m:1}.{Y:1}`              | German date format                     | 7.2.2006                           |
+| `{Y:1}年{m:1}月{d:1}日`          | Japanese date format                   | `2023年12月31日`                   |
+| `{Z:<20}({0z})`                  | Timezone description                   | `Europe/Belgrad      (+01:00)`     |
+
 ## Formatting custom types
 
 You can provide a custom `AK::Formatter<Foo>` class to format `Foo` values. For the simplest case where you already have

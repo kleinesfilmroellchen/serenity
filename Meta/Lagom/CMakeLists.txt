@@ -469,6 +469,7 @@ if (BUILD_LAGOM)
         Compress
         Crypto
         Cpp
+        DateTime
         DeviceTree
         DNS
         Diff
@@ -682,6 +683,7 @@ if (BUILD_LAGOM)
             AK
             LibCrypto
             LibCompress
+            LibDateTime
             LibGL
             LibGfx
             LibHID
