@@ -7,11 +7,12 @@
 #include "ViewEventDialog.h"
 #include "AddEventDialog.h"
 #include "ViewEventWidget.h"
+#include <LibDateTime/ISOCalendar.h>
 #include <LibGUI/Label.h>
 
 namespace Calendar {
 
-ViewEventDialog::ViewEventDialog(Core::DateTime date_time, EventManager& event_manager, GUI::Window* parent_window)
+ViewEventDialog::ViewEventDialog(DateTime::LocalDateTime date_time, EventManager& event_manager, GUI::Window* parent_window)
     : GUI::Dialog(parent_window)
     , m_event_manager(event_manager)
     , m_date_time(date_time)
@@ -29,8 +30,9 @@ ViewEventDialog::ViewEventDialog(Core::DateTime date_time, EventManager& event_m
 void ViewEventDialog::update_events()
 {
     for (auto const& event : m_event_manager.events()) {
-        auto start_date = event.start;
-        if (start_date.year() == m_date_time.year() && start_date.month() == m_date_time.month() && start_date.day() == m_date_time.day()) {
+        auto start_date = event.start.to_parts<DateTime::ISOCalendar>();
+        auto date_time = m_date_time.to_parts<DateTime::ISOCalendar>();
+        if (start_date.year == date_time.year && start_date.month == date_time.month && start_date.day_of_month == date_time.day_of_month) {
             m_events.append(event);
         }
     }

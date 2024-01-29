@@ -12,6 +12,8 @@
 #include <AK/ByteString.h>
 #include <LibConfig/Listener.h>
 #include <LibCore/DateTime.h>
+#include <LibDateTime/ISOCalendar.h>
+#include <LibDateTime/LocalDateTime.h>
 #include <LibGUI/AbstractScrollableWidget.h>
 #include <LibGUI/Frame.h>
 #include <LibGUI/Model.h>
@@ -52,8 +54,8 @@ public:
 
     virtual ~Calendar() override = default;
 
-    void set_selected_date(Core::DateTime date_time) { m_selected_date = date_time; }
-    Core::DateTime selected_date() const { return m_selected_date; }
+    void set_selected_date(DateTime::LocalDateTime date_time) { m_selected_date = date_time; }
+    DateTime::LocalDateTime selected_date() const { return m_selected_date; }
 
     void set_view_date(unsigned year, unsigned month)
     {
@@ -104,7 +106,7 @@ public:
     Function<void()> on_month_click;
 
 protected:
-    Calendar(Core::DateTime date_time = Core::DateTime::now(), Mode mode = Month);
+    Calendar(DateTime::LocalDateTime date_time = DateTime::LocalDateTime::now(), Mode mode = Month);
 
 private:
     static size_t day_of_week_index(ByteString const&);
@@ -126,6 +128,27 @@ private:
         Friday,
         Saturday
     };
+
+    // FIXME: ideally we would just use the ISOCalendar structure, but so much internal logic relies on our DayOfWeek layout that it’s a huge nontrivial change.
+    static DayOfWeek dow_from_iso_weekday(DateTime::ISOCalendar::Weekday weekday)
+    {
+        switch (weekday) {
+        case DateTime::ISOCalendar::Weekday::Monday:
+            return DayOfWeek::Monday;
+        case DateTime::ISOCalendar::Weekday::Tuesday:
+            return DayOfWeek::Tuesday;
+        case DateTime::ISOCalendar::Weekday::Wednesday:
+            return DayOfWeek::Wednesday;
+        case DateTime::ISOCalendar::Weekday::Thursday:
+            return DayOfWeek::Thursday;
+        case DateTime::ISOCalendar::Weekday::Friday:
+            return DayOfWeek::Friday;
+        case DateTime::ISOCalendar::Weekday::Saturday:
+            return DayOfWeek::Saturday;
+        case DateTime::ISOCalendar::Weekday::Sunday:
+            return DayOfWeek::Sunday;
+        }
+    }
 
     bool is_day_in_weekend(DayOfWeek);
 
@@ -156,8 +179,8 @@ private:
     int m_currently_pressed_index { -1 };
     unsigned m_view_year;
     unsigned m_view_month;
-    Core::DateTime m_selected_date;
-    Core::DateTime m_previous_selected_date;
+    DateTime::LocalDateTime m_selected_date;
+    DateTime::LocalDateTime m_previous_selected_date { DateTime::LocalDateTime::now() };
     Gfx::IntSize m_unadjusted_tile_size;
     Gfx::IntSize m_event_size;
     Gfx::IntSize m_month_size[12];

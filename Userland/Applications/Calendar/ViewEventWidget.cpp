@@ -15,7 +15,7 @@ ErrorOr<NonnullRefPtr<ViewEventWidget>> ViewEventWidget::create(ViewEventDialog*
 
     auto* events_list = widget->find_descendant_of_type_named<GUI::Widget>("events_list");
     for (auto const& event : events) {
-        String text = MUST(String::formatted("{} {}", event.start.to_byte_string("%H:%M"sv), event.summary));
+        String text = MUST(String::formatted("{:{H}:{M}} {}", event.start, event.summary));
         auto label = GUI::Label::construct(text);
         label->set_fill_with_background_color(true);
         label->set_text_alignment(Gfx::TextAlignment::CenterLeft);

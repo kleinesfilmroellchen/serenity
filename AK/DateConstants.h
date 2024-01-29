@@ -11,6 +11,7 @@
 
 namespace AK {
 
+// FIXME: Make this ISO 8601-compatible, where Monday is the first day of the week.
 static constexpr Array<StringView, 7> long_day_names = {
     "Sunday"sv, "Monday"sv, "Tuesday"sv, "Wednesday"sv, "Thursday"sv, "Friday"sv, "Saturday"sv
 };

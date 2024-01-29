@@ -18,7 +18,7 @@ class ViewEventDialog final : public GUI::Dialog {
 public:
     virtual ~ViewEventDialog() override = default;
 
-    static void show(Core::DateTime date, EventManager& event_manager, Window* parent_window = nullptr)
+    static void show(DateTime::LocalDateTime date, EventManager& event_manager, Window* parent_window = nullptr)
     {
         auto dialog = ViewEventDialog::construct(date, event_manager, parent_window);
         dialog->exec();
@@ -26,11 +26,11 @@ public:
     void close_and_open_add_event_dialog();
 
 private:
-    ViewEventDialog(Core::DateTime, EventManager&, Window*);
+    ViewEventDialog(DateTime::LocalDateTime, EventManager&, Window*);
     void update_events();
 
     EventManager& m_event_manager;
-    Core::DateTime m_date_time;
+    DateTime::LocalDateTime m_date_time;
 
     Vector<Event> m_events;
 };

@@ -12,6 +12,7 @@
 #include <AK/Noncopyable.h>
 #include <AK/OwnPtr.h>
 #include <LibCore/DateTime.h>
+#include <LibDateTime/ZonedDateTime.h>
 #include <LibFileSystemAccessClient/Client.h>
 #include <LibGUI/Window.h>
 
@@ -19,8 +20,8 @@ namespace Calendar {
 
 struct Event {
     String summary;
-    Core::DateTime start;
-    Core::DateTime end;
+    DateTime::ZonedDateTime start { DateTime::ZonedDateTime::now() };
+    DateTime::ZonedDateTime end { DateTime::ZonedDateTime::now() };
 };
 
 class EventManager {
@@ -56,7 +57,7 @@ private:
     ErrorOr<Vector<Event>> deserialize_events(JsonArray const& json);
     ErrorOr<Vector<Event>> parse_events(ByteBuffer const& content);
     ErrorOr<Vector<Event>> parse_icalendar_vevents(ByteBuffer const& content);
-    Core::DateTime format_icalendar_vevent_datetime(String const& parameter);
+    Optional<DateTime::ZonedDateTime> format_icalendar_vevent_datetime(String const& parameter);
 
     Vector<Event> m_events;
 
