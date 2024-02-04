@@ -134,7 +134,7 @@ public:
     virtual void set_span_at_index(size_t index, Syntax::TextDocumentSpan span) override { m_highlighting_document->set_span_at_index(index, span); }
     virtual Vector<Syntax::TextDocumentFoldingRegion>& folding_regions() override { return m_highlighting_document->folding_regions(); }
     virtual Vector<Syntax::TextDocumentFoldingRegion> const& folding_regions() const override { return m_highlighting_document->folding_regions(); }
-    virtual DeprecatedString highlighter_did_request_text() const override { return m_text.to_deprecated_string(); }
+    virtual ByteString highlighter_did_request_text() const override { return m_text.to_byte_string(); }
     virtual void highlighter_did_request_update() override { m_invalidated = true; }
     virtual Syntax::Document& highlighter_did_request_document() override { return m_highlighting_document; }
     virtual Syntax::TextPosition highlighter_did_request_cursor() const override { return {}; }

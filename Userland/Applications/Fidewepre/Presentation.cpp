@@ -296,7 +296,7 @@ ErrorOr<NonnullOwnPtr<Presentation>> Presentation::load_from_file(StringView fil
         TRY(json_templates.try_for_each_member([&](auto const& template_id, auto const& template_data) -> ErrorOr<void> {
             if (!template_data.is_object())
                 return Error::from_string_view("Template is not an object"sv);
-            templates.set(TRY(String::from_deprecated_string(template_id)), template_data.as_object());
+            templates.set(TRY(String::from_byte_string(template_id)), template_data.as_object());
             return {};
         }));
     }
@@ -328,7 +328,7 @@ ErrorOr<HashMap<String, String>> Presentation::parse_metadata(JsonObject const& 
     HashMap<String, String> metadata;
 
     TRY(metadata_object.try_for_each_member([&](auto const& key, auto const& value) -> ErrorOr<void> {
-        metadata.set(TRY(String::from_deprecated_string(key)), TRY(String::from_deprecated_string(value.to_deprecated_string())));
+        metadata.set(TRY(String::from_byte_string(key)), TRY(String::from_byte_string(value.template serialized<StringBuilder>())));
         return {};
     }));
 
@@ -344,12 +344,12 @@ ErrorOr<Gfx::IntSize> Presentation::parse_presentation_size(JsonObject const& me
         return Error::from_string_view("Width or aspect in incorrect format"sv);
 
     // We intentionally discard floating-point data here. If you need more resolution, just use a larger width.
-    auto const width = maybe_width->to_int();
+    auto const width = maybe_width->as_integer<int>();
     auto const aspect_parts = maybe_aspect->as_string().split_view(':');
     if (aspect_parts.size() != 2)
         return Error::from_string_view("Aspect specification must have the exact format `width:height`"sv);
-    auto aspect_width = aspect_parts[0].to_int<int>();
-    auto aspect_height = aspect_parts[1].to_int<int>();
+    auto aspect_width = aspect_parts[0].to_number<int>();
+    auto aspect_height = aspect_parts[1].to_number<int>();
     if (!aspect_width.has_value() || !aspect_height.has_value() || aspect_width.value() == 0 || aspect_height.value() == 0)
         return Error::from_string_view("Aspect width and height must be non-zero integers"sv);
 
@@ -417,7 +417,7 @@ Optional<String> Presentation::footer_text() const
         if (!footer_enabled)
             return {};
 
-        auto maybe_footer = String::from_deprecated_string(Config::read_string("Presenter"sv, "Footer"sv, "FooterText"sv, "{presentation_title}: {slide_title} ({slide_number}/{slides_total}), frame {slide_frame_number}, last modified {date}"sv));
+        auto maybe_footer = String::from_byte_string(Config::read_string("Presenter"sv, "Footer"sv, "FooterText"sv, "{presentation_title}: {slide_title} ({slide_number}/{slides_total}), frame {slide_frame_number}, last modified {date}"sv));
         if (!maybe_footer.is_error())
             return maybe_footer.release_value();
         return {};
@@ -433,18 +433,18 @@ String Presentation::format_footer(Utf8View format) const
     footer_generator.set("slide_title"sv, current_slide().title());
     footer_generator.set("author"sv, author().as_string());
     if (auto slides_total = String::number(m_slides.size()); !slides_total.is_error())
-        footer_generator.set("slides_total"sv, slides_total.value().to_deprecated_string());
+        footer_generator.set("slides_total"sv, slides_total.value().to_byte_string());
     if (auto frames_total = String::number(total_frame_count()); !frames_total.is_error())
-        footer_generator.set("frames_total"sv, frames_total.value().to_deprecated_string());
+        footer_generator.set("frames_total"sv, frames_total.value().to_byte_string());
     if (auto frame_number = String::number(global_frame_number()); !frame_number.is_error())
-        footer_generator.set("frame_number"sv, frame_number.value().to_deprecated_string());
+        footer_generator.set("frame_number"sv, frame_number.value().to_byte_string());
     if (auto slide_number = String::number(current_slide_number() + 1); !slide_number.is_error())
-        footer_generator.set("slide_number"sv, slide_number.value().to_deprecated_string());
+        footer_generator.set("slide_number"sv, slide_number.value().to_byte_string());
     if (auto slide_frames_total = String::number(current_slide().frame_count()); !slide_frames_total.is_error())
-        footer_generator.set("slide_frames_total"sv, slide_frames_total.value().to_deprecated_string());
+        footer_generator.set("slide_frames_total"sv, slide_frames_total.value().to_byte_string());
     if (auto slide_frame_number = String::number(current_frame_in_slide_number() + 1); !slide_frame_number.is_error())
-        footer_generator.set("slide_frame_number"sv, slide_frame_number.value().to_deprecated_string());
-    footer_generator.set("date"sv, last_modified().to_deprecated_string());
+        footer_generator.set("slide_frame_number"sv, slide_frame_number.value().to_byte_string());
+    footer_generator.set("date"sv, last_modified().to_byte_string());
 
     footer_generator.append(format.as_string());
     if (auto footer = String::from_utf8(footer_generator.as_string_view()); !footer.is_error())

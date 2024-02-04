@@ -38,7 +38,7 @@
 
 ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject const& slide_object_json, Presentation const& presentation, HashMap<String, JsonObject> const& templates, NonnullRefPtr<GUI::Window> window)
 {
-    auto const& maybe_type = slide_object_json.get_deprecated_string("type"sv);
+    auto const& maybe_type = slide_object_json.get_byte_string("type"sv);
     if (!maybe_type.has_value())
         return Error::from_string_view("Slide object must have a type"sv);
 
@@ -70,7 +70,7 @@ ErrorOr<NonnullRefPtr<SlideObject>> SlideObject::parse_slide_object(JsonObject c
         Vector<String> used_template_ids;
         used_template_ids.ensure_capacity(used_templates->as_array().size());
         TRY(used_templates->as_array().try_for_each([&](auto const& template_id) -> ErrorOr<void> {
-            used_template_ids.append(TRY(String::from_deprecated_string(template_id.to_deprecated_string())));
+            used_template_ids.append(TRY(String::from_byte_string(template_id.as_string())));
             return {};
         }));
 
@@ -97,7 +97,7 @@ SlideObject::SlideObject()
         { ObjectRole::TitleObject, "title" }, );
 
     register_property(
-        "frames",
+        "frames"sv,
         [this] {
             auto const& frames = this->frames();
             JsonArray json_frames;
@@ -111,17 +111,19 @@ SlideObject::SlideObject()
 
             return json_frames;
         },
-        [this](auto& value) {
+        // We can’t really do anything here except accept any value.
+        [](auto& id) -> ErrorOr<JsonValue> { return id; },
+        [this](auto value) {
             if (!value.is_array())
-                return false;
+                return;
 
             HashTable<unsigned> frames;
             auto const& values = value.as_array().values();
             for (auto const& element : values)
-                frames.set(element.template to_number<unsigned>(0));
+                frames.set(element.template get_integer<unsigned>().value_or(0));
             this->set_frames(frames);
 
-            return true;
+            return;
         });
 }
 
@@ -142,14 +144,15 @@ bool SlideObject::fetch_and_reset_invalidation()
 GraphicsObject::GraphicsObject()
 {
     register_property(
-        "color", [this]() { return this->color().to_deprecated_string(); },
-        [this](auto& value) {
-            auto color = Color::from_string(value.to_deprecated_string());
+        "color"sv, [this]() { return this->color().to_byte_string(); },
+        [](auto& id) -> ErrorOr<JsonValue> { return id; },
+        [this](auto value) {
+            auto color = Color::from_string(value.as_string());
             if (color.has_value()) {
                 this->set_color(color.value());
-                return true;
+                return;
             }
-            return false;
+            return;
         });
 }
 
@@ -367,7 +370,7 @@ Image::Image(NonnullRefPtr<GUI::Window> window, String presentation_path)
 
 ErrorOr<int> Image::reload_image()
 {
-    auto image_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_deprecated_string() }.parent().string(),
+    auto image_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_byte_string() }.parent().string(),
         m_image_path.string());
 
     auto file = TRY(Core::File::open(image_path, Core::File::OpenMode::Read));
@@ -386,7 +389,7 @@ ErrorOr<int> Image::reload_image()
 
 void Image::set_image_path(String image_path)
 {
-    m_image_path = LexicalPath { image_path.to_deprecated_string() };
+    m_image_path = LexicalPath { image_path.to_byte_string() };
 
     auto image_load_action = Threading::BackgroundAction<int>::try_create(
         [this](auto&) {

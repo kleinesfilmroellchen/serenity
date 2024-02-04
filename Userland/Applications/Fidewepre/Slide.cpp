@@ -40,7 +40,7 @@ ErrorOr<Slide> Slide::parse_slide(JsonObject const& slide_json, Presentation con
     }
 
     // For the title, we either use the slide's explicit title, or the text of a "role=title" text object, or a fallback of "Untitled slide".
-    auto maybe_title = TRY(slide_json.get_deprecated_string("title"sv).flat_map([&](auto title) -> ErrorOr<String> { return String::from_deprecated_string(title); }));
+    auto maybe_title = TRY(slide_json.get_byte_string("title"sv).flat_map([&](auto title) -> ErrorOr<String> { return String::from_byte_string(title); }));
     auto title = maybe_title.value_or(TRY(
         slide_objects.first_matching([&](auto const& object) { return object->role() == ObjectRole::TitleObject; })
             .flat_map([&](auto object) -> Optional<ErrorOr<String>> {

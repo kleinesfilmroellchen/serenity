@@ -64,7 +64,7 @@ void PDFPage::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
         if (maybe_rendered_page.is_error())
             return PDF::Error(maybe_rendered_page.release_error());
         auto rendered_page = maybe_rendered_page.value();
-        TRY(PDF::Renderer::render(*document, page, rendered_page,
+        TRY(PDF::Renderer::render(*document, page, rendered_page, Color::Transparent,
             PDF::RenderingPreferences {
                 .show_clipping_paths = false,
                 .show_images = true,
@@ -88,7 +88,7 @@ void PDFPage::paint(Gfx::Painter& painter, Gfx::FloatSize display_scale) const
 
 void PDFPage::set_pdf_path(String pdf_path)
 {
-    m_pdf_path = LexicalPath { pdf_path.to_deprecated_string() };
+    m_pdf_path = LexicalPath { pdf_path.to_byte_string() };
     execute_rerender();
     m_invalidated = true;
 }
@@ -149,7 +149,7 @@ void PDFPage::execute_rerender() const
 
 PDF::PDFErrorOr<void> PDFPage::reload_document() const
 {
-    auto pdf_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_deprecated_string() }.parent().string(),
+    auto pdf_path = LexicalPath::absolute_path(LexicalPath { m_presentation_path.to_byte_string() }.parent().string(),
         m_pdf_path.string());
     auto file = TRY(Core::File::open(pdf_path, Core::File::OpenMode::Read));
 
