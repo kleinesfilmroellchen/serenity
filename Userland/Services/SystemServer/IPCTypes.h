@@ -41,7 +41,7 @@ enum UnitState : u8 {
 
 struct ServiceInfo {
     String name;
-    DeprecatedString executable_path;
+    ByteString executable_path;
     UnitState state;
     int pid;
 };

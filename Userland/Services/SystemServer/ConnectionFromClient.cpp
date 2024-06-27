@@ -41,7 +41,7 @@ Messages::SystemControlServer::ListUnitsResponse ConnectionFromClient::list_unit
     Vector<String> unit_names;
     unit_management.for_each_unit([&](auto const& unit) {
         // Don't OOM crash the SystemServer due to a client request; returning an incomplete list is safer in this case.
-        auto name = String::from_deprecated_string(unit.name());
+        auto name = String::from_byte_string(unit.name());
         if (name.is_error())
             return IterationDecision::Break;
         auto result = unit_names.try_append(name.release_value());
@@ -57,7 +57,7 @@ Messages::SystemControlServer::QueryUnitInfoResponse ConnectionFromClient::query
     auto& unit_management = UnitManagement::the();
     Optional<Unit const&> maybe_unit;
     unit_management.for_each_unit([&](auto const& unit) {
-        if (unit.name() == unit_name) {
+        if (unit.name() == unit_name.bytes_as_string_view()) {
             maybe_unit = unit;
             return IterationDecision::Break;
         }
@@ -71,7 +71,7 @@ Messages::SystemControlServer::QueryUnitInfoResponse ConnectionFromClient::query
     if (is<Service>(unit)) {
         auto const& service = static_cast<Service const&>(unit);
 
-        auto name = String::from_deprecated_string(service.name());
+        auto name = String::from_byte_string(service.name());
         if (name.is_error())
             return { SystemServer::UnitError::OSError };
         return { SystemServer::ServiceInfo {
@@ -83,7 +83,7 @@ Messages::SystemControlServer::QueryUnitInfoResponse ConnectionFromClient::query
     } else if (is<Target>(unit)) {
         auto const& target = static_cast<Target const&>(unit);
 
-        auto name = String::from_deprecated_string(target.name());
+        auto name = String::from_byte_string(target.name());
         if (name.is_error())
             return { SystemServer::UnitError::OSError };
         return { SystemServer::TargetInfo {

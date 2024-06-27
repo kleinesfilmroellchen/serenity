@@ -21,7 +21,7 @@ ErrorOr<SystemServer::ServiceInfo> IPC::decode(Decoder& decoder)
 {
     SystemServer::ServiceInfo service_info;
     service_info.name = TRY(decoder.decode<String>());
-    service_info.executable_path = TRY(decoder.decode<DeprecatedString>());
+    service_info.executable_path = TRY(decoder.decode<ByteString>());
     service_info.state = TRY(decoder.decode<SystemServer::UnitState>());
     service_info.pid = TRY(decoder.decode<int>());
     return service_info;
