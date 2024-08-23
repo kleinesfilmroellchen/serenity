@@ -256,11 +256,99 @@ public:
         return IPv6Address({ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 });
     }
 
+    [[nodiscard]] constexpr bool is_loopback() const
+    {
+        return *this == loopback();
+    }
+
+    [[nodiscard]] constexpr bool is_in_subnet(IPv6Address subnet, u16 network_size) const
+    {
+        VERIFY(network_size <= 128);
+        return this->network(network_size) == subnet;
+    }
+
+    [[nodiscard]] constexpr IPv6Address network(u16 network_size) const
+    {
+        VERIFY(network_size <= 128);
+        u64 const low_word_size = min(network_size, 64);
+        u64 const high_word_size = clamp(static_cast<i16>(network_size) - 64, 0, 64);
+        // FIXME: somehow avoid branching for special case *without* introducing UB?
+        // Bitmagic works as follows:
+        //  - Invert the network size since we can more easily create many mask bits towards the "high" side of the address (i.e. low bits)
+        //  - For instance, size = 16 => mask off top 48 bits, so first create a mask with 48 1 bits at the bottom.
+        //  - Use inverted size to create corresponding bitmask ((1 << size) - 1). This bitmask is exactly inverse to what we want.
+        //    In the example, inverting gives us all 1 bits in the top 16 positions.
+        u64 const low_word_mask = low_word_size == 0 ? 0uLL : ~((1uLL << (64 - low_word_size)) - 1uLL);
+        u64 const high_word_mask = high_word_size == 0 ? 0uLL : ~((1uLL << (64 - high_word_size)) - 1uLL);
+        u64 const masked_low_word = low_word_mask & low_word();
+        u64 const masked_high_word = high_word_mask & high_word();
+        return { masked_low_word, masked_high_word };
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc4291#section-2.5.6
+    [[nodiscard]] constexpr bool is_link_local() const
+    {
+        return is_in_subnet({ { 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }, 10);
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc4193
+    [[nodiscard]] constexpr bool is_unique_local() const
+    {
+        return is_in_subnet({ { 0xfc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }, 7);
+    }
+
+    // https://datatracker.ietf.org/doc/html/rfc2373#section-2.7
+    [[nodiscard]] constexpr bool is_multicast() const
+    {
+        return is_in_subnet({ { 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 } }, 8);
+    }
+    [[nodiscard]] constexpr bool is_unicast() const { return !is_multicast(); }
+
 private:
     constexpr u16 group(unsigned i) const
     {
         VERIFY(i < 8);
         return ((u16)m_data[i * sizeof(u16)] << 8) | m_data[i * sizeof(u16) + 1];
+    }
+
+    constexpr u64 low_word() const
+    {
+        // NOTE: since IPv6Address is packed, its alignment is that of a byte (most certainly 1).
+        //       Therefore, we cannot simply bit_cast half of the data array (or use __builtin_bswap64),
+        //       as the u64 load would violate alignment requirements of 64-bit integers on most platforms.
+        return (static_cast<u64>(m_data[0]) << (8 * 7))
+            | (static_cast<u64>(m_data[1]) << (8 * 6))
+            | (static_cast<u64>(m_data[2]) << (8 * 5))
+            | (static_cast<u64>(m_data[3]) << (8 * 4))
+            | (static_cast<u64>(m_data[4]) << (8 * 3))
+            | (static_cast<u64>(m_data[5]) << (8 * 2))
+            | (static_cast<u64>(m_data[6]) << (8 * 1))
+            | (static_cast<u64>(m_data[7]) << (8 * 0));
+    }
+
+    constexpr u64 high_word() const
+    {
+        return (static_cast<u64>(m_data[8]) << (8 * 7))
+            | (static_cast<u64>(m_data[9]) << (8 * 6))
+            | (static_cast<u64>(m_data[10]) << (8 * 5))
+            | (static_cast<u64>(m_data[11]) << (8 * 4))
+            | (static_cast<u64>(m_data[12]) << (8 * 3))
+            | (static_cast<u64>(m_data[13]) << (8 * 2))
+            | (static_cast<u64>(m_data[14]) << (8 * 1))
+            | (static_cast<u64>(m_data[15]) << (8 * 0));
+    }
+
+    // Internal use only since it requires the big endian words from the functions above.
+    constexpr IPv6Address(u64 const low_word, u64 const high_word)
+    {
+        u64 const le_low_word = __builtin_bswap64(low_word);
+        u64 const le_high_word = __builtin_bswap64(high_word);
+        for (size_t i = 0; i < 8; ++i) {
+            u8 const low_bits = (le_low_word >> (i * 8)) & 0xff;
+            u8 const high_bits = (le_high_word >> (i * 8)) & 0xff;
+            m_data[i] = low_bits;
+            m_data[i + 8] = high_bits;
+        }
     }
 
     in6_addr_t m_data {};
