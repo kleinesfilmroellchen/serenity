@@ -20,6 +20,7 @@
 #include <Kernel/Net/EthernetFrameHeader.h>
 #include <Kernel/Net/ICMP.h>
 #include <Kernel/Net/IPv4/ARP.h>
+#include <Kernel/Net/IPv4/IP.h>
 #include <Kernel/Net/IPv4/IPv4.h>
 
 namespace Kernel {
@@ -77,7 +78,7 @@ public:
     void set_ipv4_netmask(IPv4Address const&);
 
     void send(MACAddress const&, ARPPacket const&);
-    void fill_in_ipv4_header(PacketWithTimestamp&, IPv4Address const&, MACAddress const&, IPv4Address const&, IPv4Protocol, size_t, u8 type_of_service, u8 ttl);
+    void fill_in_ipv4_header(PacketWithTimestamp&, IPv4Address const&, MACAddress const&, IPv4Address const&, TransportProtocol, size_t, u8 type_of_service, u8 ttl);
 
     size_t dequeue_packet(u8* buffer, size_t buffer_size, UnixDateTime& packet_timestamp);
 
