@@ -13,6 +13,7 @@
 #include <Kernel/Net/IPv4/ARP.h>
 #include <Kernel/Net/IPv4/IP.h>
 #include <Kernel/Net/IPv4/IPv4.h>
+#include <Kernel/Net/IPv4/IPv6.h>
 #include <Kernel/Net/IPv4/Socket.h>
 #include <Kernel/Net/LoopbackAdapter.h>
 #include <Kernel/Net/NetworkTask.h>
@@ -28,6 +29,7 @@ namespace Kernel {
 
 static void handle_arp(EthernetFrameHeader const&, size_t frame_size);
 static void handle_ipv4(EthernetFrameHeader const&, size_t frame_size, UnixDateTime const& packet_timestamp);
+static void handle_ipv6(EthernetFrameHeader const&, size_t frame_size, UnixDateTime const& packet_timestamp);
 static void handle_icmp(EthernetFrameHeader const&, IPv4Packet const&, UnixDateTime const& packet_timestamp);
 static void handle_udp(IPv4Packet const&, UnixDateTime const& packet_timestamp);
 static void handle_tcp(IPv4Packet const&, UnixDateTime const& packet_timestamp);
@@ -119,7 +121,7 @@ void NetworkTask_main(void*)
             handle_ipv4(eth, packet_size, packet_timestamp);
             break;
         case EtherType::IPv6:
-            // ignore
+            handle_ipv6(eth, packet_size, packet_timestamp);
             break;
         default:
             dbgln_if(ETHERNET_DEBUG, "NetworkTask: Unknown ethernet type {:#04x}", eth.ether_type());
@@ -218,6 +220,48 @@ void handle_ipv4(EthernetFrameHeader const& eth, size_t frame_size, UnixDateTime
         return handle_tcp(packet, packet_timestamp);
     default:
         dbgln_if(IPV4_DEBUG, "handle_ipv4: Unhandled protocol {:#02x}", packet.protocol());
+        break;
+    }
+}
+
+void handle_ipv6(EthernetFrameHeader const& eth, size_t frame_size, UnixDateTime const& packet_timestamp)
+{
+    (void)packet_timestamp;
+
+    constexpr size_t minimum_ipv6_frame_size = sizeof(EthernetFrameHeader) + sizeof(IPv6PacketHeader);
+    if (frame_size < minimum_ipv6_frame_size) {
+        dbgln("handle_ipv6: Frame too small ({}, need {})", frame_size, minimum_ipv6_frame_size);
+        return;
+    }
+    auto& packet = *static_cast<IPv6PacketHeader const*>(eth.payload());
+    size_t actual_ipv6_packet_length = frame_size - sizeof(EthernetFrameHeader);
+    size_t payload_length = actual_ipv6_packet_length - sizeof(IPv6PacketHeader);
+
+    if (packet.length() < payload_length) {
+        dbgln("handle_ipv6: IPv6 packet too short ({}, need {})", packet.length(), sizeof(IPv6PacketHeader));
+        return;
+    }
+
+    if (packet.length() > payload_length) {
+        dbgln("handle_ipv6: IPv6 packet claims to be longer than it is ({}, actually {})", packet.length(), actual_ipv6_packet_length);
+        return;
+    }
+
+    dbgln_if(IPV6_DEBUG, "handle_ipv6: source={}, destination={}", packet.source(), packet.destination());
+
+    // TODO: Update ARP tables.
+
+    // TODO: skip or handle next headers that are not the next layer protocol header.
+
+    switch ((TransportProtocol)packet.next_header()) {
+    case TransportProtocol::UDP:
+        dbgln_if(IPV6_DEBUG, "handle_ipv6: TODO: got UDP packet, what to do with it?");
+        break;
+    case TransportProtocol::TCP:
+        dbgln_if(IPV6_DEBUG, "handle_ipv6: TODO: got TCP packet, what to do with it?");
+        break;
+    default:
+        dbgln_if(IPV6_DEBUG, "handle_ipv6: Unhandled protocol {:#02x}", packet.next_header());
         break;
     }
 }
