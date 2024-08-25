@@ -159,8 +159,6 @@ void NetworkAdapter::set_ipv4_netmask(IPv4Address const& netmask)
     m_ipv4_netmask = netmask;
 }
 
-}
-
 void NetworkAdapter::set_ipv6_address(IPv6Address const& address)
 {
     m_ipv6_address = address;
@@ -169,4 +167,6 @@ void NetworkAdapter::set_ipv6_address(IPv6Address const& address)
 void NetworkAdapter::set_ipv6_netmask(IPv6Address const& netmask)
 {
     m_ipv6_netmask = netmask;
+}
+
 }

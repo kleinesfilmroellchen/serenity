@@ -143,4 +143,7 @@ public:
     static MutexProtected<IPv4Socket::List>& all_sockets();
 };
 
+// using IPv4Socket = IPSocket<IPv4Address>;
+// using IPv6Socket = IPSocket<IPv6Address>;
+
 }

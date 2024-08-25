@@ -10,6 +10,7 @@
 #include <Kernel/Net/EtherType.h>
 #include <Kernel/Net/EthernetFrameHeader.h>
 #include <Kernel/Net/ICMP.h>
+#include <Kernel/Net/ICMPv6.h>
 #include <Kernel/Net/IPv4/ARP.h>
 #include <Kernel/Net/IPv4/IP.h>
 #include <Kernel/Net/IPv4/IPv4.h>
@@ -263,8 +264,6 @@ void handle_ipv6(EthernetFrameHeader const& eth, size_t frame_size, UnixDateTime
         break;
     case TransportProtocol::ICMPv6:
         return handle_icmpv6(eth, packet, packet_timestamp);
-        dbgln_if(IPV6_DEBUG, "handle_ipv6: TODO: got ICMPv6 packet, what to do with it?");
-        break;
     default:
         dbgln_if(IPV6_DEBUG, "handle_ipv6: Unhandled protocol {:#02x}", packet.next_header());
         break;
@@ -273,26 +272,16 @@ void handle_ipv6(EthernetFrameHeader const& eth, size_t frame_size, UnixDateTime
 
 void handle_icmpv6(EthernetFrameHeader const& eth, IPv6PacketHeader const& ipv6_packet, UnixDateTime const& packet_timestamp)
 {
-    auto& icmp_header = *static_cast<ICMPHeader const*>(ipv6_packet.payload());
+    auto& icmp_header = *static_cast<ICMPv6Header const*>(ipv6_packet.payload());
     dbgln_if(ICMPV6_DEBUG, "handle_icmp6: source={}, destination={}, type={:#02x}, code={:#02x}", ipv6_packet.source().to_string(), ipv6_packet.destination().to_string(), icmp_header.type(), icmp_header.code());
 
-    {
-        Vector<NonnullRefPtr<IPv6Socket>> icmpv6_sockets;
-        IPv6Socket::all_sockets().with_exclusive([&](auto& sockets) {
-            for (auto& socket : sockets) {
-                if (socket.protocol() == (unsigned)TransportProtocol::ICMPv6)
-                    icmp_sockets.append(socket);
-            }
-        });
-        (void)packet_timestamp;
-        for (auto& socket : icmpv6_sockets)
-            socket->did_receive(ipv6_packet.source(), 0, { &ipv6_packet, sizeof(IPv6PacketHeader) + ipv6_packet.payload_size() }, packet_timestamp);
-    }
+    // TODO: Hand ICMPv6 packets to listening user sockets, once those can exist.
 
     auto adapter = NetworkingManagement::the().from_ipv6_address(ipv6_packet.destination());
     if (!adapter)
         return;
     (void)eth;
+    (void)packet_timestamp;
     /*if (icmp_header.type() == ICMPv4Type::EchoRequest) {
         auto& request = reinterpret_cast<ICMPEchoPacket const&>(icmp_header);
         dbgln("handle_icmp6: EchoRequest from {}: id={}, seq={}", ipv6_packet.source(), (u16)request.identifier, (u16)request.sequence_number);
@@ -321,7 +310,7 @@ void handle_icmpv6(EthernetFrameHeader const& eth, IPv6PacketHeader const& ipv6_
         adapter->send_packet(packet->bytes());
         adapter->release_packet_buffer(*packet);
     }*/
-    dbgln_if(ICMPV6_DEBUG, "aaaaaa!");
+    dbgln_if(ICMPV6_DEBUG, "we have an adapter: {}", adapter->name());
 }
 
 void handle_icmp(EthernetFrameHeader const& eth, IPv4Packet const& ipv4_packet, UnixDateTime const& packet_timestamp)
