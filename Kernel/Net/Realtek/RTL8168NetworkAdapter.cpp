@@ -437,6 +437,7 @@ void RTL8168NetworkAdapter::startup()
 
     // update link status
     m_link_up = (in8(REG_PHYSTATUS) & PHY_LINK_STATUS) != 0;
+    autoconf_ipv6_ll();
 }
 
 void RTL8168NetworkAdapter::configure_phy()
@@ -1322,6 +1323,7 @@ bool RTL8168NetworkAdapter::handle_irq(RegisterState const&)
         if (status & INT_LINK_CHANGE) {
             m_link_up = (in8(REG_PHYSTATUS) & PHY_LINK_STATUS) != 0;
             dmesgln_pci(*this, "Link status changed up={}", m_link_up);
+            autoconf_ipv6_ll();
         }
         if (status & INT_RX_FIFO_OVERFLOW) {
             dmesgln_pci(*this, "RX FIFO overflow");

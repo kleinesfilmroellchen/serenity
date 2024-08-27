@@ -169,4 +169,34 @@ void NetworkAdapter::set_ipv6_netmask(IPv6Address const& netmask)
     m_ipv6_netmask = netmask;
 }
 
+void NetworkAdapter::autoconf_ipv6_ll()
+{
+    auto mac = mac_address();
+    if (mac.is_zero() || !link_up())
+        return;
+
+    // TODO: other IPv6 autoconf modes
+    // TODO: duplicate address detection, this is only a very naive implementation of autoconf
+    auto ipv6_ll = IPv6Address({ 0xfe,
+        0x80,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5] });
+    auto netmask = IPv6Address({ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0 });
+    set_ipv6_address(ipv6_ll);
+    set_ipv6_netmask(netmask);
+    dbgln_if(IPV6_DEBUG, "autoconf_ipv6_ll: autoconfed {}", ipv6_ll.to_string());
+}
+
 }

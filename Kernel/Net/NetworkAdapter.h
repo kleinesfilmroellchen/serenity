@@ -67,10 +67,10 @@ public:
     IPv4Address ipv4_address() const { return m_ipv4_address; }
     IPv4Address ipv4_netmask() const { return m_ipv4_netmask; }
     IPv4Address ipv4_broadcast() const { return IPv4Address { (m_ipv4_address.to_u32() & m_ipv4_netmask.to_u32()) | ~m_ipv4_netmask.to_u32() }; }
-    
+
     IPv6Address ipv6_address() const { return m_ipv6_address; }
     IPv6Address ipv6_netmask() const { return m_ipv6_netmask; }
-    IPv6Address ipv6_multicast() const { return IPv6Address({ 0xff, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1  }); }
+    IPv6Address ipv6_multicast() const { return IPv6Address({ 0xff, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }); }
     // TODO: implement other multicast addresses
     virtual bool link_up() { return false; }
     virtual i32 link_speed()
@@ -117,6 +117,7 @@ protected:
     void set_mac_address(MACAddress const& mac_address) { m_mac_address = mac_address; }
     void did_receive(ReadonlyBytes);
     virtual void send_raw(ReadonlyBytes) = 0;
+    void autoconf_ipv6_ll();
 
 private:
     MACAddress m_mac_address;
