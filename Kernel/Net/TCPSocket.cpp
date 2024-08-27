@@ -185,8 +185,8 @@ void TCPSocket::release_for_accept(NonnullRefPtr<TCPSocket> socket)
     [[maybe_unused]] auto rc = queue_connection_from(move(socket));
 }
 
-TCPSocket::TCPSocket(int protocol, NonnullOwnPtr<DoubleBuffer> receive_buffer, NonnullOwnPtr<KBuffer> scratch_buffer, NonnullRefPtr<Timer> timer)
-    : IPv4Socket(SOCK_STREAM, protocol, move(receive_buffer), move(scratch_buffer))
+TCPSocket::TCPSocket(int protocol, NonnullOwnPtr<IPSocketDelegate> delegate, NonnullOwnPtr<DoubleBuffer> receive_buffer, NonnullOwnPtr<KBuffer> scratch_buffer, NonnullRefPtr<Timer> timer)
+    : IPSocket(delegate->domain(), SOCK_STREAM, protocol, move(delegate), move(receive_buffer), move(scratch_buffer))
     , m_last_ack_sent_time(TimeManagement::the().monotonic_time())
     , m_last_retransmit_time(TimeManagement::the().monotonic_time())
     , m_timer(timer)
@@ -200,12 +200,12 @@ TCPSocket::~TCPSocket()
     dbgln_if(TCP_SOCKET_DEBUG, "~TCPSocket in state {}", to_string(state()));
 }
 
-ErrorOr<NonnullRefPtr<TCPSocket>> TCPSocket::try_create(int protocol, NonnullOwnPtr<DoubleBuffer> receive_buffer)
+ErrorOr<NonnullRefPtr<TCPSocket>> TCPSocket::try_create(int protocol, NonnullOwnPtr<IPSocketDelegate> delegate, NonnullOwnPtr<DoubleBuffer> receive_buffer)
 {
     // Note: Scratch buffer is only used for SOCK_STREAM sockets.
     auto scratch_buffer = TRY(KBuffer::try_create_with_size("TCPSocket: Scratch buffer"sv, 65536));
     auto timer = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) Timer));
-    return adopt_nonnull_ref_or_enomem(new (nothrow) TCPSocket(protocol, move(receive_buffer), move(scratch_buffer), timer));
+    return adopt_nonnull_ref_or_enomem(new (nothrow) TCPSocket(protocol, move(delegate), move(receive_buffer), move(scratch_buffer), timer));
 }
 
 ErrorOr<size_t> TCPSocket::protocol_size(ReadonlyBytes raw_ipv4_packet)
@@ -466,7 +466,7 @@ NetworkOrdered<u16> TCPSocket::compute_tcp_checksum(IPv4Address const& source, I
 ErrorOr<void> TCPSocket::setsockopt(int level, int option, Userspace<void const*> user_value, socklen_t user_value_size)
 {
     if (level != IPPROTO_TCP)
-        return IPv4Socket::setsockopt(level, option, user_value, user_value_size);
+        return IPSocket::setsockopt(level, option, user_value, user_value_size);
 
     MutexLocker locker(mutex());
 
@@ -489,7 +489,7 @@ ErrorOr<void> TCPSocket::setsockopt(int level, int option, Userspace<void const*
 ErrorOr<void> TCPSocket::getsockopt(OpenFileDescription& description, int level, int option, Userspace<void*> value, Userspace<socklen_t*> value_size)
 {
     if (level != IPPROTO_TCP)
-        return IPv4Socket::getsockopt(description, level, option, value, value_size);
+        return IPSocket::getsockopt(description, level, option, value, value_size);
 
     MutexLocker locker(mutex());
 
@@ -664,7 +664,7 @@ void TCPSocket::shut_down_for_writing()
 ErrorOr<void> TCPSocket::close()
 {
     MutexLocker locker(mutex());
-    auto result = IPv4Socket::close();
+    auto result = IPSocket::close();
     if (state() == State::CloseWait) {
         dbgln_if(TCP_SOCKET_DEBUG, " Sending FIN from CloseWait and moving into LastAck");
         [[maybe_unused]] auto rc = send_tcp_packet(TCPFlags::FIN | TCPFlags::ACK);
@@ -769,7 +769,7 @@ void TCPSocket::retransmit_packets()
 
 bool TCPSocket::can_write(OpenFileDescription const& file_description, u64 size) const
 {
-    if (!IPv4Socket::can_write(file_description, size))
+    if (!IPSocket::can_write(file_description, size))
         return false;
 
     if (m_state == State::SynSent || m_state == State::SynReceived)

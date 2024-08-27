@@ -322,8 +322,8 @@ void handle_icmp(EthernetFrameHeader const& eth, IPv4Packet const& ipv4_packet, 
         Vector<NonnullRefPtr<IPv4Socket>> icmp_sockets;
         IPv4Socket::all_sockets().with_exclusive([&](auto& sockets) {
             for (auto& socket : sockets) {
-                if (socket.protocol() == (unsigned)TransportProtocol::ICMP)
-                    icmp_sockets.append(socket);
+                if (socket.protocol() == (unsigned)TransportProtocol::ICMP && socket.ip_version() == IPSocket::IPVersion::IPv4)
+                    icmp_sockets.append(static_cast<IPv4Socket&>(socket));
             }
         });
         for (auto& socket : icmp_sockets)
