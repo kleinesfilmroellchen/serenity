@@ -118,3 +118,10 @@ TEST_CASE(should_format_cidr)
     auto address = IPv6AddressCidr::create(IPv6Address({ 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }), 48).value().to_string().value();
     EXPECT_EQ(address.bytes_as_string_view(), "2001:db8::1/48"sv);
 }
+
+TEST_CASE(unaligned_mask)
+{
+    auto address = IPv6AddressCidr::from_string("2001:db8:0:80::1/57"sv).value();
+    EXPECT_EQ(address.first_address_of_subnet(), IPv6Address::from_string("2001:db8:0:80::"sv).value());
+    EXPECT_EQ(address.last_address_of_subnet(), IPv6Address::from_string("2001:db8:0:ff:ffff:ffff:ffff:ffff"sv).value());
+}
