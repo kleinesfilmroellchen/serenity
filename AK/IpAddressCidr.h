@@ -135,8 +135,11 @@ public:
         if (free_bits == 32) {
             netmask = IPv4Address(0, 0, 0, 0);
         } else {
-            u32 mask = -1;
-            netmask = IPv4Address(mask >> free_bits);
+            u8 address[4];
+            NetworkOrdered<u32> mask = NumericLimits<u32>::max() << free_bits;
+
+            memcpy(address, &mask, sizeof(address));
+            netmask = IPv4Address(address);
         }
 
         return netmask;
@@ -204,7 +207,7 @@ public:
         u8 free_bits = MAX_LENGTH - length();
 
         if (free_bits != 128) {
-            u128 mask = NumericLimits<u128>::max() >> free_bits;
+            NetworkOrdered<u128> mask = NumericLimits<u128>::max() << free_bits;
             u8 address_mask[16];
 
             memcpy(address_mask, &mask, sizeof(address_mask));
@@ -220,15 +223,15 @@ public:
 
     constexpr IPv6Address last_address_of_subnet() const
     {
-        u8 inverse_address_mask[16];
-        u8 address[16] = { 0 };
+        u8 address[16];
         u8 free_bits = MAX_LENGTH - length();
-        u128 inverse_mask = NumericLimits<u128>::max();
+
+        u8 inverse_address_mask[16];
+        NetworkOrdered<u128> inverse_mask = NumericLimits<u128>::max() >> (128 - free_bits);
 
         if (free_bits != 128) {
+            NetworkOrdered<u128> mask = NumericLimits<u128>::max() << free_bits;
             u8 address_mask[16];
-            u128 mask = NumericLimits<u128>::max() >> free_bits;
-            inverse_mask = inverse_mask << (128 - free_bits);
 
             memcpy(address_mask, &mask, sizeof(address_mask));
 

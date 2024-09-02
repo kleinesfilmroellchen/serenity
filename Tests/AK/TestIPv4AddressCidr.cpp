@@ -126,3 +126,10 @@ TEST_CASE(should_format_cidr)
     auto address = IPv4AddressCidr(IPv4Address(192, 0, 2, 1), 24).to_string().value();
     EXPECT_EQ(address.bytes_as_string_view(), "192.0.2.1/24"sv);
 }
+
+TEST_CASE(unaligned_mask)
+{
+    auto address = IPv4AddressCidr::create(IPv4Address(192, 0, 0, 42), 27).value();
+    EXPECT_EQ(address.first_address_of_subnet(), IPv4Address(192, 0, 0, 32));
+    EXPECT_EQ(address.last_address_of_subnet(), IPv4Address(192, 0, 0, 63));
+}
