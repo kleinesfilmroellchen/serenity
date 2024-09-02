@@ -11,6 +11,10 @@
 #include <AK/IPv6Address.h>
 #include <AK/UFixedBigInt.h>
 
+#ifdef KERNEL
+#    include <Kernel/Library/MiniStdLib.h>
+#endif
+
 namespace AK {
 
 class IPv4AddressCidr;
@@ -80,7 +84,12 @@ public:
 
         auto address_string = TRY(m_address.to_string());
 
+#ifdef KERNEL
+        TRY(builder.try_append(address_string->view()));
+#else
         TRY(builder.try_append(address_string));
+#endif
+
         TRY(builder.try_append('/'));
         TRY(builder.try_appendff("{}", m_length));
 
