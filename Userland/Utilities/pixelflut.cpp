@@ -143,13 +143,12 @@ ErrorOr<void> Client::send_current_pixel()
     auto color = m_image->get_pixel(m_current_point);
     if (color.alpha() == 0)
         return {};
-    auto hex = color.to_byte_string();
-    // Pixelflut requires hex colors without leading hash.
-    auto hex_without_hash = hex.substring(1);
 
     // PX <x> <y> <hex color>
     while (true) {
-        auto result = m_socket->write_formatted("PX {} {} {}\n", m_current_point.x() + m_image_offset.x(), m_current_point.y() + m_image_offset.y(), hex_without_hash);
+        auto result = m_socket->write_formatted("PX {} {} {:02X}{:02X}{:02X}{:02X}\n",
+            m_current_point.x() + m_image_offset.x(), m_current_point.y() + m_image_offset.y(),
+            color.red(), color.green(), color.blue(), color.alpha());
         // Very contested servers will cause frequent EAGAIN errors.
         if (!result.is_error() || result.error().code() != EAGAIN)
             break;
@@ -196,8 +195,8 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     Core::EventLoop loop;
 
     StringView image_path;
-    size_t x;
-    size_t y;
+    size_t x = 0;
+    size_t y = 0;
     StringView server;
     StringView strategy_string { "scanline"sv };
 
