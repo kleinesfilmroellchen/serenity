@@ -36,6 +36,7 @@ public:
 
     constexpr IPv4Address() = default;
 
+    // FIXME: This constructor is wrong, it should take 4 u8s.
     constexpr IPv4Address(u32 a, u32 b, u32 c, u32 d)
     {
         m_data = (d << 24) | (c << 16) | (b << 8) | a;

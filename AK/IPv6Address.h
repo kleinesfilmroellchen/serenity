@@ -22,8 +22,11 @@
 #include <AK/StringBuilder.h>
 
 namespace AK {
+class IPAddress;
 
 class [[gnu::packed]] IPv6Address {
+    friend class IPAddress;
+
 public:
     using in6_addr_t = u8[16];
 

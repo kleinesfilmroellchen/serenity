@@ -29,11 +29,6 @@ class TCPSocket;
 class IPv4Socket;
 class IPv6Socket;
 
-enum class IPVersion : bool {
-    IPv6,
-    IPv4,
-};
-
 class IPAddress : public Variant<IPv4Address, IPv6Address> {
 public:
     using Variant::Variant;
