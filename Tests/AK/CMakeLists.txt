@@ -96,6 +96,7 @@ set(AK_TEST_SOURCES
     TestUtf8.cpp
     TestVariant.cpp
     TestVector.cpp
+    TestVirtualInline.cpp
     TestWeakPtr.cpp
 )
 
