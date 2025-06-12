@@ -33,26 +33,28 @@ struct Array {
 };
 
 template<size_t N>
-consteval auto extract_used_argument_index(char const (&fmt)[N], size_t specifier_start_index, size_t specifier_end_index, size_t& next_implicit_argument_index)
+consteval auto extract_used_argument_index(char const (&fmt)[N], size_t specifier_start_index, size_t specifier_end_index)
 {
     struct {
         size_t index_value { 0 };
         bool saw_explicit_index { false };
+        bool index_valid { true };
     } state;
     for (size_t i = specifier_start_index; i < specifier_end_index; ++i) {
         auto c = fmt[i];
-        if (c > '9' || c < '0')
+        if (c > '9' || c < '0') {
+            // Encountered neither the separator between argument index and format specifier (':') nor the argument end ('}').
+            if (c != ':' && c != '}')
+                state.index_valid = false;
             break;
+        }
 
         state.index_value *= 10;
         state.index_value += c - '0';
         state.saw_explicit_index = true;
     }
 
-    if (!state.saw_explicit_index)
-        return next_implicit_argument_index++;
-
-    return state.index_value;
+    return state;
 }
 
 // FIXME: We should rather parse these format strings at compile-time if possible.
@@ -111,11 +113,17 @@ consteval auto count_fmt_params(char const (&fmt)[N])
                 if (result.total_used_argument_count >= result.used_arguments.size())
                     compiletime_fail("Format-String Checker internal error: Too many format arguments in format string");
 
-                auto used_argument_index = extract_used_argument_index<N>(fmt, specifier_start_index, i, result.next_implicit_argument_index);
-                if (used_argument_index + 1 != result.next_implicit_argument_index)
-                    result.has_explicit_argument_references = true;
-                result.used_arguments[result.total_used_argument_count++] = used_argument_index;
-
+                auto index_result = extract_used_argument_index<N>(fmt, specifier_start_index, i);
+                // Only count a used argument for valid indices.
+                // This gives implementations the freedom to use “invalid” indices for whatever purpose they like without the checker interfering.
+                if (index_result.index_valid) {
+                    if (index_result.saw_explicit_index) {
+                        result.has_explicit_argument_references = true;
+                        result.used_arguments[result.total_used_argument_count++] = index_result.index_value;
+                    } else {
+                        result.used_arguments[result.total_used_argument_count++] = result.next_implicit_argument_index++;
+                    }
+                }
             } else {
                 ++result.extra_closed_braces;
             }
