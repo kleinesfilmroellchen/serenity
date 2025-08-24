@@ -301,3 +301,250 @@ TEST_CASE(check_all_instructions)
 
     check_disassembly(all_instructions.span(), all_instructions_machine_code.span(), 0);
 }
+
+// Uses the asinh implementation from an early RISC-V LibC compiled under Clang.
+// This is a good test case as it contains both common standard instruction sequences
+// (stack setup, various branches and jumps, large immediate loads with auipc&add)
+// as well as a lot of floating-point math, testing most of the D extension including FMA instructions.
+// The manually constructed disassembly has been created with help from the output of:
+// riscv64-unknown-elf-objdump --demangle --disassemble=asinh -S Build/riscv64clang/Userland/Libraries/LibC/libc.so -M numeric,no-aliases
+// Note that objdump *never* prints rounding modes, even when the rounding mode is not dynamic (the default).
+// In these cases and other edge cases, https://luplab.gitlab.io/rvcodecjs/#abi=false&isa=RV64I helps to verify instruction decoding.
+TEST_CASE(asinh)
+{
+    Array asinh_instructions = {
+        // 000000000009ba1e <asinh>:
+        //    9ba1e:       1141                    c.addi  x2,-16
+        static_cast<NonnullOwnPtr<InstructionImpl>>(make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::Add, -16, 2_x, 2_x)),
+        //    9ba20:       e406                    c.sdsp  x1,8(x2)
+        make<MemoryStore>(8, 1_x, 2_x, MemoryAccessMode { .width = DataWidth::DoubleWord, .signedness = Signedness::Signed }),
+        //    9ba22:       e022                    c.sdsp  x8,0(x2)
+        make<MemoryStore>(0, 8_x, 2_x, MemoryAccessMode { .width = DataWidth::DoubleWord, .signedness = Signedness::Signed }),
+        //    9ba24:       0800                    c.addi4spn      x8,x2,16
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::Add, 16, 2_x, 8_x),
+
+        // 000000000009ba26 <.Lpcrel_hi75>:
+        //    9ba26:       fffbf517                auipc   x10,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 10_x),
+        //    9ba2a:       c8a53087                fld     f1,-886(x10) # 5a6b0 <.Lline_table_start0+0xa52>
+        make<FloatMemoryLoad>(-886, 10_x, FloatWidth::Double, 1_f),
+        //    9ba2e:       0aa57043                fmadd.d f0,f10,f10,f1
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 10_f, 10_f, 1_f, 0_f),
+        //    9ba32:       5a007053                fsqrt.d f0,f0
+        make<FloatSquareRoot>(RoundingMode::DYN, FloatWidth::Double, 0_f, 0_f),
+        //    9ba36:       02a07053                fadd.d  f0,f0,f10
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Add, RoundingMode::DYN, FloatWidth::Double, 0_f, 10_f, 0_f),
+        //    9ba3a:       f2000153                fmv.d.x f2,x0
+        make<MoveIntegerToFloat>(FloatWidth::Double, 0_x, 2_f),
+        //    9ba3e:       a22025d3                feq.d   x11,f0,f2
+        make<FloatCompare>(FloatCompare::Operation::Equals, FloatWidth::Double, 0_f, 2_f, 11_x),
+
+        // 000000000009ba42 <.Lpcrel_hi76>:
+        //    9ba42:       fffbf517                auipc   x10,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 10_x),
+        //    9ba46:       c591                    c.beqz  x11,9ba52 <.LBB34_2>
+        make<Branch>(Branch::Condition::Equals, 0x9ba52 - 0x9ba46, 11_x, 0_x),
+
+        // 000000000009ba48 <.Lpcrel_hi77>:
+        //    9ba48:       fffbf597                auipc   x11,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 11_x),
+        //    9ba4c:       e905b007                fld     f0,-368(x11) # 5a8d8 <.Lline_table_start0+0xc7a>
+        make<FloatMemoryLoad>(-368, 11_x, FloatWidth::Double, 0_f),
+        //    9ba50:       a0c5                    c.j     9bb30 <.LBB34_10>
+        make<JumpAndLink>(0x9bb30 - 0x9ba50, 0_x),
+
+        // 000000000009ba52 <.LBB34_2>:
+        //    9ba52:       a20115d3                flt.d   x11,f2,f0
+        make<FloatCompare>(FloatCompare::Operation::LessThan, FloatWidth::Double, 2_f, 0_f, 11_x),
+        //    9ba56:       e591                    c.bnez  x11,9ba62 <.LBB34_4>
+        make<Branch>(Branch::Condition::NotEquals, 0x9ba62 - 0x9ba56, 11_x, 0_x),
+
+        // 000000000009ba58 <.Lpcrel_hi78>:
+        //    9ba58:       fffbf597                auipc   x11,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 11_x),
+        //    9ba5c:       f105b007                fld     f0,-240(x11) # 5a968 <.Lline_table_start0+0xd0a>
+        make<FloatMemoryLoad>(-240, 11_x, FloatWidth::Double, 0_f),
+        //    9ba60:       a8c1                    c.j     9bb30 <.LBB34_10>
+        make<JumpAndLink>(0x9bb30 - 0x9ba60, 0_x),
+
+        // 000000000009ba62 <.LBB34_4>:
+        //    9ba62:       e20005d3                fmv.x.d x11,f0
+        make<MoveFloatToInteger>(FloatWidth::Double, 0_f, 11_x),
+        //    9ba66:       00159613                slli    x12,x11,0x1
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::ShiftLeftLogical, 1, 11_x, 12_x),
+        //    9ba6a:       9255                    c.srli  x12,0x35
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::ShiftRightLogical, 0x35, 12_x, 12_x),
+        //    9ba6c:       c016061b                addiw   x12,x12,-1023
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::AddWord, -1023, 12_x, 12_x),
+        //    9ba70:       00c59693                slli    x13,x11,0xc
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::ShiftLeftLogical, 0xc, 11_x, 13_x),
+        //    9ba74:       d2060053                fcvt.d.w        f0,x12
+        make<ConvertIntegerToFloat>(RoundingMode::RNE, MemoryAccessMode { .width = DataWidth::Word, .signedness = Signedness::Signed }, FloatWidth::Double, 12_x, 0_f),
+        //    9ba78:       cec5                    c.beqz  x13,9bb30 <.LBB34_10>
+        make<Branch>(Branch::Condition::Equals, 0x9bb30 - 0x9ba78, 13_x, 0_x),
+        //    9ba7a:       80100613                addi    x12,x0,-2047
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::Add, -2047, 0_x, 12_x),
+        //    9ba7e:       1652                    c.slli  x12,0x34
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::ShiftLeftLogical, 0x34, 12_x, 12_x),
+        //    9ba80:       167d                    c.addi  x12,-1
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::Add, -1, 12_x, 12_x),
+        //    9ba82:       8df1                    c.and   x11,x12
+        make<ArithmeticInstruction>(ArithmeticInstruction::Operation::And, 11_x, 12_x, 11_x),
+        //    9ba84:       3ff00613                addi    x12,x0,1023
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::Add, 1023, 0_x, 12_x),
+        //    9ba88:       1652                    c.slli  x12,0x34
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::ShiftLeftLogical, 0x34, 12_x, 12_x),
+        //    9ba8a:       8dd1                    c.or    x11,x12
+        make<ArithmeticInstruction>(ArithmeticInstruction::Operation::Or, 11_x, 12_x, 11_x),
+
+        // 000000000009ba8c <.Lpcrel_hi79>:
+        //    9ba8c:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9ba90:       b5c63207                fld     f4,-1188(x12) # 5a5e8 <.Lline_table_start0+0x98a>
+        make<FloatMemoryLoad>(-1188, 12_x, FloatWidth::Double, 4_f),
+
+        // 000000000009ba94 <.Lpcrel_hi80>:
+        //    9ba94:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9ba98:       b7c63107                fld     f2,-1156(x12) # 5a610 <.Lline_table_start0+0x9b2>
+        make<FloatMemoryLoad>(-1156, 12_x, FloatWidth::Double, 2_f),
+        //    9ba9c:       f20581d3                fmv.d.x f3,x11
+        make<MoveIntegerToFloat>(FloatWidth::Double, 11_x, 3_f),
+        //    9baa0:       a23215d3                flt.d   x11,f4,f3
+        make<FloatCompare>(FloatCompare::Operation::LessThan, FloatWidth::Double, 4_f, 3_f, 11_x),
+        //    9baa4:       c199                    c.beqz  x11,9baaa <.LBB34_7>
+        make<Branch>(Branch::Condition::Equals, 0x9baaa - 0x9baa4, 11_x, 0_x),
+        //    9baa6:       1a3171d3                fdiv.d  f3,f2,f3
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Divide, RoundingMode::DYN, FloatWidth::Double, 2_f, 3_f, 3_f),
+
+        // 000000000009baaa <.LBB34_7>:
+        //    9baaa:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9baae:       cae63207                fld     f4,-850(x12) # 5a758 <.Lline_table_start0+0xafa>
+        make<FloatMemoryLoad>(-850, 12_x, FloatWidth::Double, 4_f),
+        //    9bab2:       0241f253                fadd.d  f4,f3,f4
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Add, RoundingMode::DYN, FloatWidth::Double, 3_f, 4_f, 4_f),
+        //    9bab6:       0211f1d3                fadd.d  f3,f3,f1
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Add, RoundingMode::DYN, FloatWidth::Double, 3_f, 1_f, 3_f),
+
+        // 000000000009baba <.Lpcrel_hi82>:
+        //    9baba:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9babe:       e3e63287                fld     f5,-450(x12) # 5a8f8 <.Lline_table_start0+0xc9a>
+        make<FloatMemoryLoad>(-450, 12_x, FloatWidth::Double, 5_f),
+
+        // 000000000009bac2 <.Lpcrel_hi83>:
+        //    9bac2:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9bac6:       ed663307                fld     f6,-298(x12) # 5a998 <.Lline_table_start0+0xd3a>
+        make<FloatMemoryLoad>(-298, 12_x, FloatWidth::Double, 6_f),
+
+        // 000000000009baca <.Lpcrel_hi84>:
+        //    9baca:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9bace:       af663387                fld     f7,-1290(x12) # 5a5c0 <.Lline_table_start0+0x962>
+        make<FloatMemoryLoad>(-1290, 12_x, FloatWidth::Double, 7_f),
+        //    9bad2:       1a3271d3                fdiv.d  f3,f4,f3
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Divide, RoundingMode::DYN, FloatWidth::Double, 4_f, 3_f, 3_f),
+        //    9bad6:       1231f253                fmul.d  f4,f3,f3
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Multiply, RoundingMode::DYN, FloatWidth::Double, 3_f, 3_f, 4_f),
+        //    9bada:       2a6272c3                fmadd.d f5,f4,f6,f5
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 4_f, 6_f, 5_f, 5_f),
+        //    9bade:       3a5272c3                fmadd.d f5,f4,f5,f7
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 4_f, 5_f, 7_f, 5_f),
+
+        // 000000000009bae2 <.Lpcrel_hi85>:
+        //    9bae2:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9bae6:       c4663307                fld     f6,-954(x12) # 5a728 <.Lline_table_start0+0xaca>
+        make<FloatMemoryLoad>(-954, 12_x, FloatWidth::Double, 6_f),
+
+        // 000000000009baea <.Lpcrel_hi86>:
+        //    9baea:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9baee:       b2e63387                fld     f7,-1234(x12) # 5a618 <.Lline_table_start0+0x9ba>
+        make<FloatMemoryLoad>(-1234, 12_x, FloatWidth::Double, 7_f),
+
+        // 000000000009baf2 <.Lpcrel_hi87>:
+        //    9baf2:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9baf6:       c5663507                fld     f10,-938(x12) # 5a748 <.Lline_table_start0+0xaea>
+        make<FloatMemoryLoad>(-938, 12_x, FloatWidth::Double, 10_f),
+
+        // 000000000009bafa <.Lpcrel_hi88>:
+        //    9bafa:       fffbf617                auipc   x12,0xfffbf
+        make<AddUpperImmediateToProgramCounter>(0xfffbf000, 12_x),
+        //    9bafe:       b7e63587                fld     f11,-1154(x12) # 5a678 <.Lline_table_start0+0xa1a>
+        make<FloatMemoryLoad>(-1154, 12_x, FloatWidth::Double, 11_f),
+        //    9bb02:       325272c3                fmadd.d f5,f4,f5,f6
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 4_f, 5_f, 6_f, 5_f),
+        //    9bb06:       3a5272c3                fmadd.d f5,f4,f5,f7
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 4_f, 5_f, 7_f, 5_f),
+        //    9bb0a:       525272c3                fmadd.d f5,f4,f5,f10
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 4_f, 5_f, 10_f, 5_f),
+        //    9bb0e:       5a5272c3                fmadd.d f5,f4,f5,f11
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 4_f, 5_f, 11_f, 5_f),
+        //    9bb12:       e5653307                fld     f6,-426(x10) # 5a898 <.Lline_table_start0+0xc3a>
+        make<FloatMemoryLoad>(-426, 10_x, FloatWidth::Double, 6_f),
+        //    9bb16:       12527253                fmul.d  f4,f4,f5
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Multiply, RoundingMode::DYN, FloatWidth::Double, 4_f, 5_f, 4_f),
+        //    9bb1a:       1241f253                fmul.d  f4,f3,f4
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Multiply, RoundingMode::DYN, FloatWidth::Double, 3_f, 4_f, 4_f),
+        //    9bb1e:       2221f143                fmadd.d f2,f3,f2,f4
+        make<FloatFusedMultiplyAdd>(FloatFusedMultiplyAdd::Operation::MultiplyAdd, RoundingMode::DYN, FloatWidth::Double, 3_f, 2_f, 4_f, 2_f),
+        //    9bb22:       12617153                fmul.d  f2,f2,f6
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Multiply, RoundingMode::DYN, FloatWidth::Double, 2_f, 6_f, 2_f),
+        //    9bb26:       c199                    c.beqz  x11,9bb2c <.LBB34_9>
+        make<Branch>(Branch::Condition::Equals, 0x9bb2c - 0x9bb26, 11_x, 0_x),
+        //    9bb28:       0a20f153                fsub.d  f2,f1,f2
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Subtract, RoundingMode::DYN, FloatWidth::Double, 1_f, 2_f, 2_f),
+
+        // 000000000009bb2c <.LBB34_9>:
+        //    9bb2c:       02017053                fadd.d  f0,f2,f0
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Add, RoundingMode::DYN, FloatWidth::Double, 2_f, 0_f, 0_f),
+
+        // 000000000009bb30 <.LBB34_10>:
+        //    9bb30:       e5653087                fld     f1,-426(x10)
+        make<FloatMemoryLoad>(-426, 10_x, FloatWidth::Double, 1_f),
+        //    9bb34:       1a107553                fdiv.d  f10,f0,f1
+        make<FloatArithmeticInstruction>(FloatArithmeticInstruction::Operation::Divide, RoundingMode::DYN, FloatWidth::Double, 0_f, 1_f, 10_f),
+        //    9bb38:       60a2                    c.ldsp  x1,8(x2)
+        make<MemoryLoad>(8, 2_x, MemoryAccessMode { .width = DataWidth::DoubleWord, .signedness = Signedness::Signed }, 1_x),
+        //    9bb3a:       6402                    c.ldsp  x8,0(x2)
+        make<MemoryLoad>(0, 2_x, MemoryAccessMode { .width = DataWidth::DoubleWord, .signedness = Signedness::Signed }, 8_x),
+        //    9bb3c:       0141                    c.addi  x2,16
+        make<ArithmeticImmediateInstruction>(ArithmeticImmediateInstruction::Operation::Add, 16, 2_x, 2_x),
+        //    9bb3e:       8082                    c.jr    x1
+        make<JumpAndLinkRegister>(0, 1_x, 0_x),
+    };
+
+    constexpr Array asinh_machine_code = {
+        static_cast<u8>(0x41), 0x11, 0x06, 0xe4, 0x22, 0xe0, 0x00, 0x08, 0x17, 0xf5, 0xfb, 0xff,
+        0x87, 0x30, 0xa5, 0xc8, 0x43, 0x70, 0xa5, 0x0a, 0x53, 0x70, 0x00, 0x5a,
+        0x53, 0x70, 0xa0, 0x02, 0x53, 0x01, 0x00, 0xf2, 0xd3, 0x25, 0x20, 0xa2,
+        0x17, 0xf5, 0xfb, 0xff, 0x91, 0xc5, 0x97, 0xf5, 0xfb, 0xff, 0x07, 0xb0,
+        0x05, 0xe9, 0xc5, 0xa0, 0xd3, 0x15, 0x01, 0xa2, 0x91, 0xe5, 0x97, 0xf5,
+        0xfb, 0xff, 0x07, 0xb0, 0x05, 0xf1, 0xc1, 0xa8, 0xd3, 0x05, 0x00, 0xe2,
+        0x13, 0x96, 0x15, 0x00, 0x55, 0x92, 0x1b, 0x06, 0x16, 0xc0, 0x93, 0x96,
+        0xc5, 0x00, 0x53, 0x00, 0x06, 0xd2, 0xc5, 0xce, 0x13, 0x06, 0x10, 0x80,
+        0x52, 0x16, 0x7d, 0x16, 0xf1, 0x8d, 0x13, 0x06, 0xf0, 0x3f, 0x52, 0x16,
+        0xd1, 0x8d, 0x17, 0xf6, 0xfb, 0xff, 0x07, 0x32, 0xc6, 0xb5, 0x17, 0xf6,
+        0xfb, 0xff, 0x07, 0x31, 0xc6, 0xb7, 0xd3, 0x81, 0x05, 0xf2, 0xd3, 0x15,
+        0x32, 0xa2, 0x99, 0xc1, 0xd3, 0x71, 0x31, 0x1a, 0x17, 0xf6, 0xfb, 0xff,
+        0x07, 0x32, 0xe6, 0xca, 0x53, 0xf2, 0x41, 0x02, 0xd3, 0xf1, 0x11, 0x02,
+        0x17, 0xf6, 0xfb, 0xff, 0x87, 0x32, 0xe6, 0xe3, 0x17, 0xf6, 0xfb, 0xff,
+        0x07, 0x33, 0x66, 0xed, 0x17, 0xf6, 0xfb, 0xff, 0x87, 0x33, 0x66, 0xaf,
+        0xd3, 0x71, 0x32, 0x1a, 0x53, 0xf2, 0x31, 0x12, 0xc3, 0x72, 0x62, 0x2a,
+        0xc3, 0x72, 0x52, 0x3a, 0x17, 0xf6, 0xfb, 0xff, 0x07, 0x33, 0x66, 0xc4,
+        0x17, 0xf6, 0xfb, 0xff, 0x87, 0x33, 0xe6, 0xb2, 0x17, 0xf6, 0xfb, 0xff,
+        0x07, 0x35, 0x66, 0xc5, 0x17, 0xf6, 0xfb, 0xff, 0x87, 0x35, 0xe6, 0xb7,
+        0xc3, 0x72, 0x52, 0x32, 0xc3, 0x72, 0x52, 0x3a, 0xc3, 0x72, 0x52, 0x52,
+        0xc3, 0x72, 0x52, 0x5a, 0x07, 0x33, 0x65, 0xe5, 0x53, 0x72, 0x52, 0x12,
+        0x53, 0xf2, 0x41, 0x12, 0x43, 0xf1, 0x21, 0x22, 0x53, 0x71, 0x61, 0x12,
+        0x99, 0xc1, 0x53, 0xf1, 0x20, 0x0a, 0x53, 0x70, 0x01, 0x02, 0x87, 0x30,
+        0x65, 0xe5, 0x53, 0x75, 0x10, 0x1a, 0xa2, 0x60, 0x02, 0x64, 0x41, 0x01,
+        0x82, 0x80
+    };
+
+    check_disassembly(asinh_instructions.span(), asinh_machine_code.span(), 0x9ba1e);
+}
